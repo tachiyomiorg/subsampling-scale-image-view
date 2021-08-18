@@ -101,10 +101,7 @@ class ImageSource {
          * @return an [ImageSource] instance.
          */
         @JvmStatic
-        fun asset(context: Context, assetName: String?): ImageSource {
-            if (assetName == null) {
-                throw NullPointerException("Asset name must not be null")
-            }
+        fun asset(context: Context, assetName: String): ImageSource {
             return ImageSource(AssetInputProvider(context, assetName))
         }
 
@@ -114,10 +111,7 @@ class ImageSource {
          * @param uri image URI.
          * @return an [ImageSource] instance.
          */
-        fun uri(context: Context, uri: Uri?): ImageSource {
-            if (uri == null) {
-                throw NullPointerException("Uri must not be null")
-            }
+        fun uri(context: Context, uri: Uri): ImageSource {
             return ImageSource(UriInputProvider(context, uri))
         }
 
@@ -127,10 +121,7 @@ class ImageSource {
          * @param provider input stream provider.
          * @return an [ImageSource] instance.
          */
-        fun provider(provider: InputProvider?): ImageSource {
-            if (provider == null) {
-                throw NullPointerException("Input provider must not be null")
-            }
+        fun provider(provider: InputProvider): ImageSource {
             return ImageSource(provider)
         }
 
@@ -140,10 +131,7 @@ class ImageSource {
          * @param stream open input stream.
          * @return an [ImageSource] instance.
          */
-        fun inputStream(stream: InputStream?): ImageSource {
-            if (stream == null) {
-                throw NullPointerException("Input stream must not be null")
-            }
+        fun inputStream(stream: InputStream): ImageSource {
             return ImageSource(OpenStreamProvider(stream))
         }
 
@@ -153,10 +141,7 @@ class ImageSource {
          * @param bitmap bitmap to be displayed.
          * @return an [ImageSource] instance.
          */
-        fun bitmap(bitmap: Bitmap?): ImageSource {
-            if (bitmap == null) {
-                throw NullPointerException("Bitmap must not be null")
-            }
+        fun bitmap(bitmap: Bitmap): ImageSource {
             return ImageSource(bitmap, false)
         }
 
@@ -168,10 +153,7 @@ class ImageSource {
          * @param bitmap bitmap to be displayed.
          * @return an [ImageSource] instance.
          */
-        fun cachedBitmap(bitmap: Bitmap?): ImageSource {
-            if (bitmap == null) {
-                throw NullPointerException("Bitmap must not be null")
-            }
+        fun cachedBitmap(bitmap: Bitmap): ImageSource {
             return ImageSource(bitmap, true)
         }
     }
