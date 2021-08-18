@@ -214,7 +214,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
     var extraSpaceBottom = 0f
 
     // Source coordinate to center on, used when new position is set externally before view is ready
-    private var pendingScale: Float? = null
+    private var pendingScale = -1F
     private var sPendingCenter: PointF? = null
     private var sRequestedCenter: PointF? = null
 
@@ -390,7 +390,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
         vTranslate = null
         vTranslateStart = null
         vTranslateBefore = null
-        pendingScale = 0f
+        pendingScale = -1F
         sPendingCenter = null
         sRequestedCenter = null
         isZooming = false
@@ -1299,15 +1299,15 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
         }
 
         // If waiting to translate to new center position, set translate now
-        if (sPendingCenter != null && pendingScale != null) {
-            scale = pendingScale!!
+        if (sPendingCenter != null && pendingScale >= 0) {
+            scale = pendingScale
             if (vTranslate == null) {
                 vTranslate = PointF()
             }
             vTranslate!!.x = width / 2 - scale * sPendingCenter!!.x
             vTranslate!!.y = height / 2 - scale * sPendingCenter!!.y
             sPendingCenter = null
-            pendingScale = null
+            pendingScale = -1F
             fitToBounds(true)
             refreshRequiredTiles(true)
         }
