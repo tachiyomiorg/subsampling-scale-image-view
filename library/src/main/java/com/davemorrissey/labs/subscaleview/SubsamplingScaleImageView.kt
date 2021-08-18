@@ -18,13 +18,12 @@ import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.View
 import androidx.annotation.AnyThread
+import androidx.annotation.IntDef
 import com.davemorrissey.labs.subscaleview.ImageSource.Companion.asset
 import com.davemorrissey.labs.subscaleview.ImageSource.Companion.resource
-import kotlin.jvm.JvmOverloads
-import com.davemorrissey.labs.subscaleview.provider.InputProvider
-import kotlin.jvm.Synchronized
 import com.davemorrissey.labs.subscaleview.decoder.Decoder
 import com.davemorrissey.labs.subscaleview.decoder.ImageDecoder
+import com.davemorrissey.labs.subscaleview.provider.InputProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -33,14 +32,11 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.lang.IllegalStateException
 import java.util.ArrayList
-import java.util.Arrays
 import java.util.LinkedHashMap
 import java.util.Locale
 import java.util.concurrent.locks.ReadWriteLock
 import java.util.concurrent.locks.ReentrantReadWriteLock
-import kotlin.Exception
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -123,10 +119,10 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
     private var minimumTileDpi = -1
 
     // Pan limiting style
-    private var panLimit = PAN_LIMIT_INSIDE
+    @PanLimit private var panLimit = PAN_LIMIT_INSIDE
 
     // Minimum scale type
-    private var minimumScaleType = SCALE_TYPE_CENTER_INSIDE
+    @ScaleType private var minimumScaleType = SCALE_TYPE_CENTER_INSIDE
 
     // Whether to crop borders.
     private var cropBorders = false
@@ -163,7 +159,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
 
     // Double tap zoom behaviour
     private var doubleTapZoomScale = 1f
-    private var doubleTapZoomStyle = ZOOM_FOCUS_FIXED
+    @ZoomStyle private var doubleTapZoomStyle = ZOOM_FOCUS_FIXED
     private var doubleTapZoomDuration = 500
 
     /**
@@ -1996,8 +1992,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
      *
      * @param panLimit a pan limit constant. See static fields.
      */
-    fun setPanLimit(panLimit: Int) {
-        require(VALID_PAN_LIMITS.contains(panLimit)) { "Invalid pan limit: $panLimit" }
+    fun setPanLimit(@PanLimit panLimit: Int) {
         this.panLimit = panLimit
         if (isReady) {
             fitToBounds(true)
@@ -2010,8 +2005,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
      *
      * @param scaleType a scale type constant. See static fields.
      */
-    fun setMinimumScaleType(scaleType: Int) {
-        require(VALID_SCALE_TYPES.contains(scaleType)) { "Invalid scale type: $scaleType" }
+    fun setMinimumScaleType(@ScaleType scaleType: Int) {
         minimumScaleType = scaleType
         if (isReady) {
             fitToBounds(true)
@@ -2245,8 +2239,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
      *
      * @param doubleTapZoomStyle New value for zoom style.
      */
-    fun setDoubleTapZoomStyle(doubleTapZoomStyle: Int) {
-        require(VALID_ZOOM_STYLES.contains(doubleTapZoomStyle)) { "Invalid zoom style: $doubleTapZoomStyle" }
+    fun setDoubleTapZoomStyle(@ZoomStyle doubleTapZoomStyle: Int) {
         this.doubleTapZoomStyle = doubleTapZoomStyle
     }
 
@@ -2597,8 +2590,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
          * @param easing easing style.
          * @return this builder for method chaining.
          */
-        fun withEasing(easing: Int): AnimationBuilder {
-            require(VALID_EASING_STYLES.contains(easing)) { "Unknown easing type: $easing" }
+        fun withEasing(@EasingStyle easing: Int): AnimationBuilder {
             this.easing = easing
             return this
         }
@@ -2688,6 +2680,14 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
     }
 
     companion object {
+        @Retention(AnnotationRetention.SOURCE)
+        @IntDef(
+            ZOOM_FOCUS_FIXED,
+            ZOOM_FOCUS_CENTER,
+            ZOOM_FOCUS_CENTER_IMMEDIATE
+        )
+        annotation class ZoomStyle
+
         /**
          * During zoom animation, keep the point of the image that was tapped in the same place, and scale the image around it.
          */
@@ -2703,6 +2703,13 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
          */
         const val ZOOM_FOCUS_CENTER_IMMEDIATE = 3
 
+        @Retention(AnnotationRetention.SOURCE)
+        @IntDef(
+            EASE_IN_OUT_QUAD,
+            EASE_OUT_QUAD
+        )
+        annotation class EasingStyle
+
         /**
          * Quadratic ease out. Not recommended for scale animation, but good for panning.
          */
@@ -2712,6 +2719,14 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
          * Quadratic ease in and out.
          */
         const val EASE_IN_OUT_QUAD = 2
+
+        @Retention(AnnotationRetention.SOURCE)
+        @IntDef(
+            PAN_LIMIT_INSIDE,
+            PAN_LIMIT_OUTSIDE,
+            PAN_LIMIT_CENTER
+        )
+        annotation class PanLimit
 
         /**
          * Don't allow the image to be panned off screen. As much of the image as possible is always displayed, centered in the view when it is smaller. This is the best option for galleries.
@@ -2727,6 +2742,18 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
          * Allows the image to be panned until a corner reaches the center of the screen but no further. Useful when you want to pan any spot on the image to the exact center of the screen.
          */
         const val PAN_LIMIT_CENTER = 3
+
+        @Retention(AnnotationRetention.SOURCE)
+        @IntDef(
+            SCALE_TYPE_CENTER_INSIDE,
+            SCALE_TYPE_CENTER_CROP,
+            SCALE_TYPE_FIT_WIDTH,
+            SCALE_TYPE_FIT_HEIGHT,
+            SCALE_TYPE_ORIGINAL_SIZE,
+            SCALE_TYPE_SMART_FIT,
+            SCALE_TYPE_CUSTOM
+        )
+        annotation class ScaleType
 
         /**
          * Scale the image so that both dimensions of the image will be equal to or less than the corresponding dimension of the view. The image is then centered in the view. This is the default behaviour and best for galleries.
@@ -2770,19 +2797,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
         // overrides for the dimensions of the generated tiles
         const val TILE_SIZE_AUTO = Int.MAX_VALUE
         private val TAG = SubsamplingScaleImageView::class.java.simpleName
-        private val VALID_ZOOM_STYLES = Arrays.asList(ZOOM_FOCUS_FIXED, ZOOM_FOCUS_CENTER, ZOOM_FOCUS_CENTER_IMMEDIATE)
-        private val VALID_EASING_STYLES = Arrays.asList(EASE_IN_OUT_QUAD, EASE_OUT_QUAD)
-        private val VALID_PAN_LIMITS = Arrays.asList(PAN_LIMIT_INSIDE, PAN_LIMIT_OUTSIDE, PAN_LIMIT_CENTER)
-        private val VALID_SCALE_TYPES = Arrays.asList(
-            SCALE_TYPE_CENTER_CROP,
-            SCALE_TYPE_CENTER_INSIDE,
-            SCALE_TYPE_CUSTOM,
-            SCALE_TYPE_FIT_WIDTH,
-            SCALE_TYPE_FIT_HEIGHT,
-            SCALE_TYPE_ORIGINAL_SIZE,
-            SCALE_TYPE_SMART_FIT
-        )
-        private const val MESSAGE_LONG_CLICK = 1
+
         /**
          * Get the current preferred configuration for decoding bitmaps. [Decoder]
          * instances can read this and use it when decoding images.
