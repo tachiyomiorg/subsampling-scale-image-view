@@ -10,10 +10,6 @@ import android.graphics.Point
 import android.graphics.PointF
 import android.graphics.Rect
 import android.graphics.RectF
-import android.os.AsyncTask
-import android.os.Handler
-import android.os.Looper
-import android.os.Message
 import android.util.AttributeSet
 import android.util.Log
 import android.util.TypedValue
@@ -28,18 +24,23 @@ import com.davemorrissey.labs.subscaleview.provider.InputProvider
 import kotlin.jvm.Synchronized
 import com.davemorrissey.labs.subscaleview.decoder.Decoder
 import com.davemorrissey.labs.subscaleview.decoder.ImageDecoder
-import java.lang.Exception
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.lang.IllegalStateException
 import java.lang.NullPointerException
-import java.lang.RuntimeException
-import java.lang.ref.WeakReference
 import java.util.ArrayList
 import java.util.Arrays
 import java.util.LinkedHashMap
 import java.util.Locale
-import java.util.concurrent.Executor
 import java.util.concurrent.locks.ReadWriteLock
 import java.util.concurrent.locks.ReentrantReadWriteLock
+import kotlin.Exception
 
 /**
  *
@@ -66,11 +67,15 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
     View(context, attr) {
     private val decoderLock: ReadWriteLock = ReentrantReadWriteLock(true)
 
+    // Coroutines scope
+    private val scopeMain = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
     // Current quickscale state
     private val quickScaleThreshold: Float
 
     // Long click handler
-    private val longClickHandler: Handler
+    private var longClickJob: Job? = null
+
     private val srcArray = FloatArray(8)
     private val dstArray = FloatArray(8)
 
@@ -122,9 +127,6 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
     private var cropBorders = false
     private var maxTileWidth = TILE_SIZE_AUTO
     private var maxTileHeight = TILE_SIZE_AUTO
-
-    // An executor service for loading of images
-    private var executor = AsyncTask.THREAD_POOL_EXECUTOR
 
     // Whether tiles should be loaded while gestures and animations are still in progress
     private var eagerLoadingEnabled = true
@@ -350,8 +352,33 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
             // Load the bitmap using tile decoding.
             provider = imageSource.provider
             sRegion = imageSource.sRegion
-            val task = TilesInitTask(this, context, provider)
-            execute(task)
+            initTiles()
+        }
+    }
+
+    private fun initTiles() = scopeMain.launch {
+        try {
+            debug("initTiles")
+            decoder = ImageDecoder(cropBorders)
+            val dimensions = decoder!!.init(context, provider!!)
+            var sWidth = dimensions.x
+            var sHeight = dimensions.y
+            sRegion?.apply {
+                left = left.coerceAtLeast(0)
+                top = top.coerceAtLeast(0)
+                right = right.coerceAtLeast(sWidth)
+                bottom = bottom.coerceAtLeast(sHeight)
+                sWidth = width()
+                sHeight = height()
+            }
+            withContext(Dispatchers.Main) {
+                onTilesInited(decoder!!, sWidth, sHeight)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to initialise bitmap decoder", e)
+            withContext(Dispatchers.Main) {
+                onImageEventListener?.onImageLoadError(e)
+            }
         }
     }
 
@@ -483,6 +510,11 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
         })
     }
 
+    override fun onDetachedFromWindow() {
+        super.onDetachedFromWindow()
+        scopeMain.cancel()
+    }
+
     /**
      * On resize, preserve center and scale. Various behaviours are possible, override this method to use another.
      */
@@ -595,14 +627,21 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
                         maxTouchCount = 0
                     }
                     // Cancel long click timer
-                    longClickHandler.removeMessages(MESSAGE_LONG_CLICK)
+                    longClickJob?.cancel()
                 } else if (!isQuickScaling) {
                     // Start one-finger pan
                     vTranslateStart!![vTranslate!!.x] = vTranslate!!.y
                     vCenterStart!![event.x] = event.y
 
                     // Start long click timer
-                    longClickHandler.sendEmptyMessageDelayed(MESSAGE_LONG_CLICK, 600)
+                    longClickJob = scopeMain.launch {
+                        if (onLongClickListener != null) {
+                            delay(600)
+                            super@SubsamplingScaleImageView.setOnLongClickListener(onLongClickListener)
+                            performLongClick()
+                            super@SubsamplingScaleImageView.setOnLongClickListener(null)
+                        }
+                    }
                 }
                 return true
             }
@@ -731,7 +770,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
                             } else if (dx > offset || dy > offset) {
                                 // Haven't panned the image, and we're at the left or right edge. Switch to page swipe.
                                 maxTouchCount = 0
-                                longClickHandler.removeMessages(MESSAGE_LONG_CLICK)
+                                longClickJob?.cancel()
                                 requestDisallowInterceptTouchEvent(false)
                             }
                             if (!panEnabled) {
@@ -744,13 +783,13 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
                     }
                 }
                 if (consumed) {
-                    longClickHandler.removeMessages(MESSAGE_LONG_CLICK)
+                    longClickJob?.cancel()
                     invalidate()
                     return true
                 }
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP, MotionEvent.ACTION_POINTER_2_UP -> {
-                longClickHandler.removeMessages(MESSAGE_LONG_CLICK)
+                longClickJob?.cancel()
                 if (isQuickScaling) {
                     isQuickScaling = false
                     if (!quickScaleMoved) {
@@ -1167,6 +1206,36 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
         }
     }
 
+    private fun loadTile(tile: Tile) = scopeMain.launch {
+        try {
+            val imageDecoder = decoder ?: return@launch
+            if (!imageDecoder.isReady || !tile.visible) return@launch
+
+            debug(
+                "loadTile, tile.sRect=%s, tile.sampleSize=%d",
+                tile.sRect,
+                tile.sampleSize
+            )
+            decoderLock.readLock().lock()
+            try {
+                if (imageDecoder.isReady) {
+                    tile.bitmap = imageDecoder.decodeRegion(tile.fileSRect, tile.sampleSize)
+                    onTileLoaded()
+                }
+            } finally {
+                decoderLock.readLock().unlock()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to decode tile", e)
+            onImageEventListener?.onTileLoadError(e)
+        } catch (e: OutOfMemoryError) {
+            Log.e(TAG, "Failed to decode tile - OutOfMemoryError", e)
+            onImageEventListener?.onTileLoadError(Exception(e))
+        } finally {
+            tile.loading = false
+        }
+    }
+
     /**
      * Called on first draw when the view has dimensions. Calculates the initial sample size and starts async loading of
      * the base layer image - the whole source subsampled as necessary.
@@ -1186,8 +1255,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
         initialiseTileMap(maxTileDimensions)
         val baseGrid = tileMap!![fullImageSampleSize]!!
         for (baseTile in baseGrid) {
-            val task = TileLoadTask(this, decoder, baseTile)
-            execute(task)
+            loadTile(baseTile)
         }
         refreshRequiredTiles(true)
     }
@@ -1219,8 +1287,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
                     if (tileVisible(tile)) {
                         tile.visible = true
                         if (!tile.loading && tile.bitmap == null && load) {
-                            val task = TileLoadTask(this, decoder, tile)
-                            execute(task)
+                            loadTile(tile)
                         }
                     } else if (tile.sampleSize != fullImageSampleSize) {
                         tile.visible = false
@@ -1512,10 +1579,6 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
             invalidate()
             requestLayout()
         }
-    }
-
-    private fun execute(asyncTask: AsyncTask<*, *, *>) {
-        asyncTask.executeOnExecutor(executor)
     }
 
     /**
@@ -2219,33 +2282,6 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
     }
 
     /**
-     *
-     *
-     * Provide an [Executor] to be used for loading images. By default, [AsyncTask.THREAD_POOL_EXECUTOR]
-     * is used to minimise contention with other background work the app is doing. You can also choose
-     * to use [AsyncTask.SERIAL_EXECUTOR] if you want to limit concurrent background tasks.
-     * Alternatively you can supply an [Executor] of your own to avoid any contention. It is
-     * strongly recommended to use a single executor instance for the life of your application, not
-     * one per view instance.
-     *
-     *
-     * **Warning:** If you are using a custom implementation of [Decoder], and you
-     * supply an executor with more than one thread, you must make sure your implementation supports
-     * multi-threaded bitmap decoding or has appropriate internal synchronization. From SDK 21, Android's
-     * [android.graphics.BitmapRegionDecoder] uses an internal lock so it is thread safe but
-     * there is no advantage to using multiple threads.
-     *
-     *
-     * @param executor an [Executor] for image loading.
-     */
-    fun setExecutor(executor: Executor) {
-        if (executor == null) {
-            throw NullPointerException("Executor must not be null")
-        }
-        this.executor = executor
-    }
-
-    /**
      * Enable or disable eager loading of tiles that appear on screen during gestures or animations,
      * while the gesture or animation is still in progress. By default this is enabled to improve
      * responsiveness, but it can result in tiles being loaded and discarded more rapidly than
@@ -2443,131 +2479,6 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
          * @param origin    Where the event originated from - one of [.ORIGIN_ANIM], [.ORIGIN_TOUCH].
          */
         fun onCenterChanged(newCenter: PointF?, origin: Int)
-    }
-
-    /**
-     * Async task used to get image details without blocking the UI thread.
-     */
-    private class TilesInitTask internal constructor(
-        view: SubsamplingScaleImageView,
-        context: Context,
-        provider: InputProvider?
-    ) : AsyncTask<Any, Void, IntArray?>() {
-        private val viewRef: WeakReference<SubsamplingScaleImageView>
-        private val contextRef: WeakReference<Context>
-        private val providerRef: WeakReference<InputProvider?>
-        private var decoder: Decoder? = null
-        private var exception: Exception? = null
-        override fun doInBackground(vararg params: Any): IntArray? {
-            try {
-                val context = contextRef.get()
-                val view = viewRef.get()
-                val provider = providerRef.get()
-                if (context != null && view != null && provider === view.provider) {
-                    view.debug("TilesInitTask.doInBackground")
-                    decoder = ImageDecoder(view.cropBorders)
-                    val dimensions = decoder!!.init(context, provider!!)
-                    var sWidth = dimensions.x
-                    var sHeight = dimensions.y
-                    if (view.sRegion != null) {
-                        view.sRegion!!.left = Math.max(0, view.sRegion!!.left)
-                        view.sRegion!!.top = Math.max(0, view.sRegion!!.top)
-                        view.sRegion!!.right = Math.min(sWidth, view.sRegion!!.right)
-                        view.sRegion!!.bottom = Math.min(sHeight, view.sRegion!!.bottom)
-                        sWidth = view.sRegion!!.width()
-                        sHeight = view.sRegion!!.height()
-                    }
-                    return intArrayOf(sWidth, sHeight)
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to initialise bitmap decoder", e)
-                exception = e
-            }
-            return null
-        }
-
-        override fun onPostExecute(xy: IntArray?) {
-            val view = viewRef.get()
-            val provider = providerRef.get()
-            if (view != null && provider === view.provider) {
-                if (decoder != null && xy != null && xy.size == 2) {
-                    view.onTilesInited(decoder!!, xy[0], xy[1])
-                } else if (exception != null && view.onImageEventListener != null) {
-                    view.onImageEventListener!!.onImageLoadError(exception)
-                }
-            }
-        }
-
-        init {
-            viewRef = WeakReference(view)
-            contextRef = WeakReference(context)
-            providerRef = WeakReference(provider)
-        }
-    }
-
-    /**
-     * Async task used to load images without blocking the UI thread.
-     */
-    private class TileLoadTask internal constructor(view: SubsamplingScaleImageView, decoder: Decoder?, tile: Tile) :
-        AsyncTask<Any, Void, Bitmap?>() {
-        private val viewRef: WeakReference<SubsamplingScaleImageView>
-        private val decoderRef: WeakReference<Decoder?>
-        private val tileRef: WeakReference<Tile>
-        private var exception: Exception? = null
-        override fun doInBackground(vararg params: Any): Bitmap? {
-            try {
-                val view = viewRef.get()
-                val decoder = decoderRef.get()
-                val tile = tileRef.get()
-                if (decoder != null && tile != null && view != null && decoder.isReady && tile.visible) {
-                    view.debug(
-                        "TileLoadTask.doInBackground, tile.sRect=%s, tile.sampleSize=%d",
-                        tile.sRect!!,
-                        tile.sampleSize
-                    )
-                    view.decoderLock.readLock().lock()
-                    try {
-                        if (decoder.isReady) {
-                            return decoder.decodeRegion(tile.fileSRect!!, tile.sampleSize)
-                        } else {
-                            tile.loading = false
-                        }
-                    } finally {
-                        view.decoderLock.readLock().unlock()
-                    }
-                } else if (tile != null) {
-                    tile.loading = false
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to decode tile", e)
-                exception = e
-            } catch (e: OutOfMemoryError) {
-                Log.e(TAG, "Failed to decode tile - OutOfMemoryError", e)
-                exception = RuntimeException(e)
-            }
-            return null
-        }
-
-        override fun onPostExecute(bitmap: Bitmap?) {
-            val subsamplingScaleImageView = viewRef.get()
-            val tile = tileRef.get()
-            if (subsamplingScaleImageView != null && tile != null) {
-                if (bitmap != null) {
-                    tile.bitmap = bitmap
-                    tile.loading = false
-                    subsamplingScaleImageView.onTileLoaded()
-                } else if (exception != null && subsamplingScaleImageView.onImageEventListener != null) {
-                    subsamplingScaleImageView.onImageEventListener!!.onTileLoadError(exception)
-                }
-            }
-        }
-
-        init {
-            viewRef = WeakReference(view)
-            decoderRef = WeakReference(decoder)
-            tileRef = WeakReference(tile)
-            tile.loading = true
-        }
     }
 
     private data class Tile(
@@ -2918,20 +2829,6 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
         setDoubleTapZoomDpi(160)
         setGestureDetector(context)
 
-        longClickHandler = Handler(
-            Looper.getMainLooper(),
-            object : Handler.Callback {
-                override fun handleMessage(message: Message): Boolean {
-                    if (message.what == MESSAGE_LONG_CLICK && onLongClickListener != null) {
-                        maxTouchCount = 0
-                        super@SubsamplingScaleImageView.setOnLongClickListener(onLongClickListener)
-                        performLongClick()
-                        super@SubsamplingScaleImageView.setOnLongClickListener(null)
-                    }
-                    return true
-                }
-            }
-        )
         // Handle XML attributes
         if (attr != null) {
             val typedAttr = getContext().obtainStyledAttributes(attr, R.styleable.SubsamplingScaleImageView)
