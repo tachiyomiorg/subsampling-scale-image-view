@@ -63,8 +63,11 @@ import kotlin.math.sqrt
  * [View project on GitHub](https://github.com/davemorrissey/subsampling-scale-image-view)
  *
  */
-open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context, attr: AttributeSet? = null) :
-    View(context, attr) {
+@Suppress("unused")
+open class SubsamplingScaleImageView @JvmOverloads constructor(
+    context: Context,
+    attr: AttributeSet? = null
+) : View(context, attr) {
     private val decoderLock: ReadWriteLock = ReentrantReadWriteLock(true)
 
     // Coroutines scope
@@ -112,7 +115,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
      * @param maxScale maximum scale expressed as a source/view pixels ratio.
      */
     // Max scale allowed (prevent infinite zoom)
-    var maxScale = 2f
+    var maxScale = 2F
 
     // Density to reach before loading higher resolution tiles
     private var minimumTileDpi = -1
@@ -157,7 +160,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
     var isQuickScaleEnabled = true
 
     // Double tap zoom behaviour
-    private var doubleTapZoomScale = 1f
+    private var doubleTapZoomScale = 1F
     @ZoomStyle private var doubleTapZoomStyle = ZOOM_FOCUS_FIXED
     private var doubleTapZoomDuration = 500
 
@@ -167,9 +170,9 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
      * @return the current scale as a source/view pixels ratio.
      */
     // Current scale and scale at start of zoom
-    var scale = 0f
+    var scale = 0F
         private set
-    private var scaleStart = 0f
+    private var scaleStart = 0F
 
     // Screen coordinate of top-left corner of source image
     private var vTranslate: PointF? = null
@@ -184,7 +187,8 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
      * @see .setExtraSpace
      */
     // Extra space that artificially increases size of an image
-    var extraSpaceLeft = 0f
+    var extraSpaceLeft = 0F
+
     /**
      * @see .setExtraSpace
      * @return top extra space in view pixels
@@ -193,7 +197,8 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
      * Sets top extra space for the view in view pixels.
      * @see .setExtraSpace
      */
-    var extraSpaceTop = 0f
+    var extraSpaceTop = 0F
+
     /**
      * @see .setExtraSpace
      * @return right extra space in view pixels
@@ -202,7 +207,8 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
      * Sets right extra space for the view in view pixels.
      * @see .setExtraSpace
      */
-    var extraSpaceRight = 0f
+    var extraSpaceRight = 0F
+
     /**
      * @see .setExtraSpace
      * @return bottom extra space in view pixels
@@ -211,7 +217,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
      * Sets bottom extra space for the view in view pixels.
      * @see .setExtraSpace
      */
-    var extraSpaceBottom = 0f
+    var extraSpaceBottom = 0F
 
     // Source coordinate to center on, used when new position is set externally before view is ready
     private var pendingScale = -1F
@@ -260,8 +266,8 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
 
     // Debug values
     private var vCenterStart: PointF? = null
-    private var vDistStart = 0f
-    private var quickScaleLastDistance = 0f
+    private var vDistStart = 0F
+    private var quickScaleLastDistance = 0F
     private var quickScaleMoved = false
     private var quickScaleVLastPoint: PointF? = null
     private var quickScaleSCenter: PointF? = null
@@ -373,8 +379,9 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
     private fun initTiles() = scopeMain.launch {
         try {
             debug("initTiles")
+            val imageProvider = provider ?: throw IllegalStateException("Image provider not set")
             decoder = ImageDecoder(cropBorders)
-            val dimensions = decoder!!.init(context, provider!!)
+            val dimensions = decoder!!.init(context, imageProvider)
             var sWidth = dimensions.x
             var sHeight = dimensions.y
             sRegion.apply {
@@ -391,7 +398,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
                 onTilesInited(decoder!!, sWidth, sHeight)
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to initialise bitmap decoder", e)
+            Log.e(TAG, e.message, e)
             withContext(Dispatchers.Main) {
                 onImageEventListener?.onImageLoadError(e)
             }
@@ -403,8 +410,8 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
      */
     private fun reset(newImage: Boolean) {
         debug("reset newImage=$newImage")
-        scale = 0f
-        scaleStart = 0f
+        scale = 0F
+        scaleStart = 0F
         vTranslate = null
         vTranslateStart = null
         vTranslateBefore = null
@@ -417,8 +424,8 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
         maxTouchCount = 0
         fullImageSampleSize = 0
         vCenterStart = null
-        vDistStart = 0f
-        quickScaleLastDistance = 0f
+        vDistStart = 0F
+        quickScaleLastDistance = 0F
         quickScaleMoved = false
         quickScaleSCenter = null
         quickScaleVLastPoint = null
@@ -431,15 +438,13 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
             provider = null
             decoderLock.writeLock().lock()
             try {
-                if (decoder != null) {
-                    decoder!!.recycle()
-                    decoder = null
-                }
+                decoder?.recycle()
+                decoder = null
             } finally {
                 decoderLock.writeLock().unlock()
             }
-            if (bitmap != null && !bitmapIsCached) {
-                bitmap!!.recycle()
+            if (!bitmapIsCached) {
+                bitmap?.recycle()
             }
             sWidth = 0
             sHeight = 0
@@ -466,7 +471,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
         detector = GestureDetector(context, object : GestureDetector.SimpleOnGestureListener() {
             override fun onFling(e1: MotionEvent, e2: MotionEvent, velocityX: Float, velocityY: Float): Boolean {
                 if (panEnabled && isReady && vTranslate != null && (abs(e1.x - e2.x) > 50 || abs(e1.y - e2.y) > 50) && (abs(velocityX) > 500 || abs(velocityY) > 500) && !isZooming) {
-                    val vTranslateEnd = PointF(vTranslate!!.x + velocityX * 0.25f, vTranslate!!.y + velocityY * 0.25f)
+                    val vTranslateEnd = PointF(vTranslate!!.x + velocityX * 0.25F, vTranslate!!.y + velocityY * 0.25F)
                     val sCenterXEnd = (width / 2 - vTranslateEnd.x) / scale
                     val sCenterYEnd = (height / 2 - vTranslateEnd.y) / scale
                     AnimationBuilder(PointF(sCenterXEnd, sCenterYEnd))
@@ -497,7 +502,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
                         scaleStart = scale
                         isQuickScaling = true
                         isZooming = true
-                        quickScaleLastDistance = -1f
+                        quickScaleLastDistance = -1F
                         quickScaleSCenter = viewToSourceCoord(vCenterStart!!)
                         quickScaleVStart = PointF(e.x, e.y)
                         quickScaleVLastPoint = PointF(quickScaleSCenter!!.x, quickScaleSCenter!!.y)
@@ -533,11 +538,10 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
      */
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         debug("onSizeChanged %dx%d -> %dx%d", oldw, oldh, w, h)
-        val sCenter = center
-        if (isReady && sCenter != null) {
+        if (isReady && center != null) {
             anim = null
             pendingScale = scale
-            sPendingCenter = sCenter
+            sPendingCenter = center
         }
     }
 
@@ -575,16 +579,17 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
         // During non-interruptible anims, ignore all touch events
-        anim = if (anim != null && !anim!!.interruptible) {
+        if (anim?.interruptible == false) {
             requestDisallowInterceptTouchEvent(true)
             return true
-        } else {
-            try {
-                anim?.listener?.onInterruptedByUser()
-            } catch (e: Exception) {
-                Log.w(TAG, "Error thrown by animation listener", e)
-            }
-            null
+        }
+
+        try {
+            anim?.listener?.onInterruptedByUser()
+        } catch (e: Exception) {
+            Log.w(TAG, "Error thrown by animation listener", e)
+        } finally {
+            anim = null
         }
 
         // Abort if not ready
@@ -593,7 +598,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
             return true
         }
         // Detect flings, taps and double taps
-        if (!isQuickScaling && (detector == null || detector!!.onTouchEvent(event))) {
+        if (!isQuickScaling && detector?.onTouchEvent(event) != false) {
             isZooming = false
             isPanning = false
             maxTouchCount = 0
@@ -626,9 +631,8 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
                 if (touchCount >= 2) {
                     if (isZoomEnabled) {
                         // Start pinch to zoom. Calculate distance between touch points and center point of the pinch.
-                        val distance = distance(event.getX(0), event.getX(1), event.getY(0), event.getY(1))
                         scaleStart = scale
-                        vDistStart = distance
+                        vDistStart = distance(event.getX(0), event.getX(1), event.getY(0), event.getY(1))
                         vTranslateStart!![vTranslate!!.x] = vTranslate!!.y
                         vCenterStart!![(event.getX(0) + event.getX(1)) / 2] = (event.getY(0) + event.getY(1)) / 2
                     } else {
@@ -706,15 +710,15 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
                         // One finger zoom
                         // Stole Google's Magical Formula™ to make sure it feels the exact same
                         var dist = abs(quickScaleVStart!!.y - event.y) * 2 + quickScaleThreshold
-                        if (quickScaleLastDistance == -1f) {
+                        if (quickScaleLastDistance == -1F) {
                             quickScaleLastDistance = dist
                         }
                         val isUpwards = event.y > quickScaleVLastPoint!!.y
-                        quickScaleVLastPoint!![0f] = event.y
-                        val spanDiff = abs(1 - dist / quickScaleLastDistance) * 0.5f
-                        if (spanDiff > 0.03f || quickScaleMoved) {
+                        quickScaleVLastPoint!![0F] = event.y
+                        val spanDiff = abs(1 - dist / quickScaleLastDistance) * 0.5F
+                        if (spanDiff > 0.03F || quickScaleMoved) {
                             quickScaleMoved = true
-                            var multiplier = 1f
+                            var multiplier = 1F
                             if (quickScaleLastDistance > 0) {
                                 multiplier = if (isUpwards) 1 + spanDiff else 1 - spanDiff
                             }
@@ -732,7 +736,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
                                     vCenterStart!!.set(sourceToViewCoord(quickScaleSCenter)!!)
                                     vTranslateStart!!.set(vTranslate!!)
                                     scaleStart = scale
-                                    dist = 0f
+                                    dist = 0F
                                 }
                             } else if (sRequestedCenter != null) {
                                 // With a center specified from code, zoom around that point.
@@ -860,15 +864,17 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
         if (doubleTapZoomStyle == ZOOM_FOCUS_CENTER_IMMEDIATE) {
             setScaleAndCenter(targetScale, sCenter)
         } else if (doubleTapZoomStyle == ZOOM_FOCUS_CENTER || !zoomIn || !panEnabled) {
-            AnimationBuilder(targetScale, sCenter).withInterruptible(false).withDuration(doubleTapZoomDuration.toLong())
-                .withOrigin(
-                    ORIGIN_DOUBLE_TAP_ZOOM
-                ).start()
+            AnimationBuilder(targetScale, sCenter)
+                .withInterruptible(false)
+                .withDuration(doubleTapZoomDuration.toLong())
+                .withOrigin(ORIGIN_DOUBLE_TAP_ZOOM)
+                .start()
         } else if (doubleTapZoomStyle == ZOOM_FOCUS_FIXED) {
-            AnimationBuilder(targetScale, sCenter, vFocus).withInterruptible(false)
-                .withDuration(doubleTapZoomDuration.toLong()).withOrigin(
-                ORIGIN_DOUBLE_TAP_ZOOM
-            ).start()
+            AnimationBuilder(targetScale, sCenter, vFocus)
+                .withInterruptible(false)
+                .withDuration(doubleTapZoomDuration.toLong())
+                .withOrigin(ORIGIN_DOUBLE_TAP_ZOOM)
+                .start()
         }
         invalidate()
     }
@@ -978,16 +984,18 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
                                 canvas.drawRect(tile.vRect, it)
                             }
                             mtrx.reset()
+                            val tileWidth = tile.bitmap!!.width.toFloat()
+                            val tileHeight = tile.bitmap!!.height.toFloat()
                             setMatrixArray(
                                 srcArray,
-                                0f,
-                                0f,
-                                tile.bitmap!!.width.toFloat(),
-                                0f,
-                                tile.bitmap!!.width.toFloat(),
-                                tile.bitmap!!.height.toFloat(),
-                                0f,
-                                tile.bitmap!!.height.toFloat()
+                                0F,
+                                0F,
+                                tileWidth,
+                                0F,
+                                tileWidth,
+                                tileHeight,
+                                0F,
+                                tileHeight
                             )
                             setMatrixArray(
                                 dstArray,
@@ -1032,7 +1040,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
             mtrx.postTranslate(vTranslate!!.x, vTranslate!!.y)
             tileBgPaint?.let {
                 sRect.setEmpty()
-                sRect[0f, 0f, sWidth.toFloat()] = sHeight.toFloat()
+                sRect[0F, 0F, sWidth.toFloat()] = sHeight.toFloat()
                 mtrx.mapRect(sRect)
                 canvas.drawRect(sRect, it)
             }
@@ -1217,9 +1225,8 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
             fullImageSampleSize /= 2
         }
         initialiseTileMap(maxTileDimensions)
-        val baseGrid = tileMap[fullImageSampleSize]!!
-        for (baseTile in baseGrid) {
-            loadTile(baseTile)
+        tileMap[fullImageSampleSize]?.forEach {
+            loadTile(it)
         }
         refreshRequiredTiles(true)
     }
@@ -1267,9 +1274,9 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
      * Determine whether tile is visible.
      */
     private fun tileVisible(tile: Tile): Boolean {
-        val sVisLeft = viewToSourceX(0f)
+        val sVisLeft = viewToSourceX(0F)
         val sVisRight = viewToSourceX(width.toFloat())
-        val sVisTop = viewToSourceY(0f)
+        val sVisTop = viewToSourceY(0F)
         val sVisBottom = viewToSourceY(height.toFloat())
         return !(sVisLeft > tile.sRect.right || tile.sRect.left > sVisRight || sVisTop > tile.sRect.bottom || tile.sRect.top > sVisBottom)
     }
@@ -1372,9 +1379,9 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
 
         // Asymmetric padding adjustments
         val xPaddingRatio =
-            if (paddingLeft > 0 || paddingRight > 0) paddingLeft / (paddingLeft + paddingRight).toFloat() else 0.5f
+            if (paddingLeft > 0 || paddingRight > 0) paddingLeft / (paddingLeft + paddingRight).toFloat() else 0.5F
         val yPaddingRatio =
-            if (paddingTop > 0 || paddingBottom > 0) paddingTop / (paddingTop + paddingBottom).toFloat() else 0.5f
+            if (paddingTop > 0 || paddingBottom > 0) paddingTop / (paddingTop + paddingBottom).toFloat() else 0.5F
 
         val maxTx: Float
         val maxTy: Float
@@ -1517,10 +1524,10 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
      * Called by worker task when full size image bitmap is ready (tiling is disabled).
      */
     @Synchronized
-    private fun onImageLoaded(bitmap: Bitmap?, bitmapIsCached: Boolean) {
+    private fun onImageLoaded(bitmap: Bitmap, bitmapIsCached: Boolean) {
         debug("onImageLoaded")
         // If actual dimensions don't match the declared size, reset everything.
-        if (sWidth > 0 && sHeight > 0 && (sWidth != bitmap!!.width || sHeight != bitmap.height)) {
+        if (sWidth > 0 && sHeight > 0 && (sWidth != bitmap.width || sHeight != bitmap.height)) {
             reset(false)
         }
         if (!this.bitmapIsCached) {
@@ -1528,7 +1535,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
         }
         this.bitmapIsCached = bitmapIsCached
         this.bitmap = bitmap
-        sWidth = bitmap!!.width
+        sWidth = bitmap.width
         sHeight = bitmap.height
         val ready = checkReady()
         val imageLoaded = checkImageLoaded()
@@ -1621,18 +1628,14 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
      * Convert screen to source x coordinate.
      */
     private fun viewToSourceX(vx: Float): Float {
-        return if (vTranslate == null) {
-            Float.NaN
-        } else (vx - vTranslate!!.x) / scale
+        return if (vTranslate == null) Float.NaN else (vx - vTranslate!!.x) / scale
     }
 
     /**
      * Convert screen to source y coordinate.
      */
     private fun viewToSourceY(vy: Float): Float {
-        return if (vTranslate == null) {
-            Float.NaN
-        } else (vy - vTranslate!!.y) / scale
+        return if (vTranslate == null) Float.NaN else (vy - vTranslate!!.y) / scale
     }
 
     /**
@@ -1651,15 +1654,19 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
      * @param fRect rectangle instance to which the result will be written. Re-use for efficiency.
      */
     fun viewToFileRect(vRect: Rect, fRect: Rect) {
-        if (vTranslate == null || !isReady) {
-            return
-        }
-        fRect[viewToSourceX(vRect.left.toFloat()).toInt(), viewToSourceY(vRect.top.toFloat()).toInt(), viewToSourceX(
-            vRect.right.toFloat()
-        ).toInt()] = viewToSourceY(vRect.bottom.toFloat()).toInt()
+        if (vTranslate == null || !isReady) return
+
+        fRect[
+                viewToSourceX(vRect.left.toFloat()).toInt(),
+                viewToSourceY(vRect.top.toFloat()).toInt(),
+                viewToSourceX(vRect.right.toFloat()).toInt()
+        ] = viewToSourceY(vRect.bottom.toFloat()).toInt()
         fileSRect(fRect, fRect)
-        fRect[fRect.left.coerceAtLeast(0), fRect.top.coerceAtLeast(0), fRect.right.coerceAtLeast(sWidth)] =
-            fRect.bottom.coerceAtLeast(sHeight)
+        fRect[
+                fRect.left.coerceAtLeast(0),
+                fRect.top.coerceAtLeast(0),
+                fRect.right.coerceAtLeast(sWidth)
+        ] = fRect.bottom.coerceAtLeast(sHeight)
         if (!sRegion.isEmpty) {
             fRect.offset(sRegion.left, sRegion.top)
         }
@@ -1728,18 +1735,14 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
      * Convert source to view x coordinate.
      */
     private fun sourceToViewX(sx: Float): Float {
-        return if (vTranslate == null) {
-            Float.NaN
-        } else sx * scale + vTranslate!!.x
+        return if (vTranslate == null) Float.NaN else sx * scale + vTranslate!!.x
     }
 
     /**
      * Convert source to view y coordinate.
      */
     private fun sourceToViewY(sy: Float): Float {
-        return if (vTranslate == null) {
-            Float.NaN
-        } else sy * scale + vTranslate!!.y
+        return if (vTranslate == null) Float.NaN else sy * scale + vTranslate!!.y
     }
 
     /**
@@ -1790,9 +1793,11 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
      * Convert source rect to screen rect, integer values.
      */
     private fun sourceToViewRect(sRect: Rect, vTarget: Rect) {
-        vTarget[sourceToViewX(sRect.left.toFloat()).toInt(), sourceToViewY(sRect.top.toFloat()).toInt(), sourceToViewX(
-            sRect.right.toFloat()
-        ).toInt()] = sourceToViewY(sRect.bottom.toFloat()).toInt()
+        vTarget[
+                sourceToViewX(sRect.left.toFloat()).toInt(),
+                sourceToViewY(sRect.top.toFloat()).toInt(),
+                sourceToViewX(sRect.right.toFloat()).toInt()
+        ] = sourceToViewY(sRect.bottom.toFloat()).toInt()
     }
 
     /**
@@ -1908,7 +1913,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
      * @return Current value
      */
     private fun easeInOutQuad(time: Long, from: Float, change: Float, duration: Long): Float {
-        var timeF = time / (duration / 2f)
+        var timeF = time / (duration / 2F)
         return if (timeF < 1) {
             change / 2f * timeF * timeF + from
         } else {
@@ -1947,21 +1952,25 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
         }
         val scaleWidth = scale * sWidth
         val scaleHeight = scale * sHeight
-        if (panLimit == PAN_LIMIT_CENTER) {
-            vTarget.top = -(vTranslate!!.y - height / 2).coerceAtLeast(0F)
-            vTarget.left = -(vTranslate!!.x - width / 2).coerceAtLeast(0F)
-            vTarget.bottom = (vTranslate!!.y - (height / 2 - scaleHeight)).coerceAtLeast(0F)
-            vTarget.right = (vTranslate!!.x - (width / 2 - scaleWidth)).coerceAtLeast(0F)
-        } else if (panLimit == PAN_LIMIT_OUTSIDE) {
-            vTarget.top = -(vTranslate!!.y - height).coerceAtLeast(0F)
-            vTarget.left = -(vTranslate!!.x - width).coerceAtLeast(0F)
-            vTarget.bottom = (vTranslate!!.y + scaleHeight).coerceAtLeast(0F)
-            vTarget.right = (vTranslate!!.x + scaleWidth).coerceAtLeast(0F)
-        } else {
-            vTarget.top = -vTranslate!!.y.coerceAtLeast(0F)
-            vTarget.left = -vTranslate!!.x.coerceAtLeast(0F)
-            vTarget.bottom = (scaleHeight + vTranslate!!.y - height).coerceAtLeast(0F)
-            vTarget.right = (scaleWidth + vTranslate!!.x - width).coerceAtLeast(0F)
+        when (panLimit) {
+            PAN_LIMIT_CENTER -> {
+                vTarget.top = -(vTranslate!!.y - height / 2).coerceAtLeast(0F)
+                vTarget.left = -(vTranslate!!.x - width / 2).coerceAtLeast(0F)
+                vTarget.bottom = (vTranslate!!.y - (height / 2 - scaleHeight)).coerceAtLeast(0F)
+                vTarget.right = (vTranslate!!.x - (width / 2 - scaleWidth)).coerceAtLeast(0F)
+            }
+            PAN_LIMIT_OUTSIDE -> {
+                vTarget.top = -(vTranslate!!.y - height).coerceAtLeast(0F)
+                vTarget.left = -(vTranslate!!.x - width).coerceAtLeast(0F)
+                vTarget.bottom = (vTranslate!!.y + scaleHeight).coerceAtLeast(0F)
+                vTarget.right = (vTranslate!!.x + scaleWidth).coerceAtLeast(0F)
+            }
+            else -> {
+                vTarget.top = -vTranslate!!.y.coerceAtLeast(0F)
+                vTarget.left = -vTranslate!!.x.coerceAtLeast(0F)
+                vTarget.bottom = (scaleHeight + vTranslate!!.y - height).coerceAtLeast(0F)
+                vTarget.right = (scaleWidth + vTranslate!!.x - width).coerceAtLeast(0F)
+            }
         }
     }
 
@@ -2112,11 +2121,11 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
      */
     fun resetScaleAndCenter() {
         anim = null
-        pendingScale = limitedScale(0f)
-        if (isReady) {
-            sPendingCenter = PointF((sWidth / 2F), (sHeight / 2F))
+        pendingScale = limitedScale(0F)
+        sPendingCenter = if (isReady) {
+            PointF((sWidth / 2F), (sHeight / 2F))
         } else {
-            sPendingCenter = PointF(0F, 0F)
+            PointF(0F, 0F)
         }
         invalidate()
     }
@@ -2308,9 +2317,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
      * @return [AnimationBuilder] instance. Call [SubsamplingScaleImageView.AnimationBuilder.start] to start the anim.
      */
     fun animateCenter(sCenter: PointF): AnimationBuilder? {
-        return if (!isReady) {
-            null
-        } else AnimationBuilder(sCenter)
+        return if (isReady) AnimationBuilder(sCenter) else null
     }
 
     /**
@@ -2321,9 +2328,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
      * @return [AnimationBuilder] instance. Call [SubsamplingScaleImageView.AnimationBuilder.start] to start the anim.
      */
     fun animateScale(scale: Float): AnimationBuilder? {
-        return if (!isReady) {
-            null
-        } else AnimationBuilder(scale)
+        return if (isReady) AnimationBuilder(scale) else null
     }
 
     /**
@@ -2335,9 +2340,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
      * @return [AnimationBuilder] instance. Call [SubsamplingScaleImageView.AnimationBuilder.start] to start the anim.
      */
     fun animateScaleAndCenter(scale: Float, sCenter: PointF?): AnimationBuilder? {
-        return if (!isReady) {
-            null
-        } else AnimationBuilder(scale, sCenter)
+        return if (isReady) AnimationBuilder(scale, sCenter) else null
     }
 
     /**
@@ -2607,12 +2610,10 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
          * Starts the animation.
          */
         fun start() {
-            if (anim != null && anim!!.listener != null) {
-                try {
-                    anim!!.listener!!.onInterruptedByNewAnim()
-                } catch (e: Exception) {
-                    Log.w(TAG, "Error thrown by animation listener", e)
-                }
+            try {
+                anim?.listener?.onInterruptedByNewAnim()
+            } catch (e: Exception) {
+                Log.w(TAG, "Error thrown by animation listener", e)
             }
             val vxCenter = paddingLeft + (width - paddingRight - paddingLeft) / 2
             val vyCenter = paddingTop + (height - paddingBottom - paddingTop) / 2
@@ -2835,6 +2836,6 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
             typedAttr.recycle()
         }
         quickScaleThreshold =
-            TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 20f, context.resources.displayMetrics)
+            TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 20F, context.resources.displayMetrics)
     }
 }
