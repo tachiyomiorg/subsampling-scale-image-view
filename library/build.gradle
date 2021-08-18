@@ -25,8 +25,8 @@ configurations {
 
 dependencies {
     api "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
-    javadocs 'androidx.annotation:annotation:1.1.0'
-    implementation 'androidx.annotation:annotation:1.1.0'
+    javadocs 'androidx.annotation:annotation:1.2.0'
+    implementation 'androidx.annotation:annotation:1.2.0'
     implementation 'com.github.tachiyomiorg:image-decoder:0d43783'
 
     api "org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutines_version"
