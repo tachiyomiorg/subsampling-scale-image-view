@@ -33,7 +33,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.ArrayList
-import java.util.LinkedHashMap
 import java.util.Locale
 import java.util.concurrent.locks.ReadWriteLock
 import java.util.concurrent.locks.ReentrantReadWriteLock
@@ -96,7 +95,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
     private var fullImageSampleSize = 0
 
     // Map of zoom level to tile grid
-    private var tileMap: MutableMap<Int, List<Tile>>? = null
+    private val tileMap: MutableMap<Int, List<Tile>> = mutableMapOf()
 
     // Overlay tile boundaries and other info
     private var debug = false
@@ -432,17 +431,15 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
             bitmap = null
             bitmapIsCached = false
         }
-        if (tileMap != null) {
-            for ((_, value) in tileMap!!) {
-                for (tile in value) {
+        if (tileMap.isNotEmpty()) {
+            tileMap.forEach { (_, value) ->
+                value.forEach { tile ->
                     tile.visible = false
-                    if (tile.bitmap != null) {
-                        tile.bitmap!!.recycle()
-                        tile.bitmap = null
-                    }
+                    tile.bitmap?.recycle()
+                    tile.bitmap = null
                 }
             }
-            tileMap = null
+            tileMap.clear()
         }
         setGestureDetector(context)
     }
@@ -872,7 +869,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
         }
 
         // When using tiles, on first render with no tile map ready, initialise it and kick off async base image loading.
-        if (tileMap == null && decoder != null) {
+        if (tileMap.isEmpty() && decoder != null) {
             initialiseBaseLayer(getMaxBitmapDimensions(canvas))
         }
 
@@ -938,15 +935,15 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
             }
             invalidate()
         }
-        if (tileMap != null && isBaseLayerReady) {
+        if (tileMap.isNotEmpty() && isBaseLayerReady) {
             // Optimum sample size for current scale
             val sampleSize = calculateInSampleSize(scale).coerceAtMost(fullImageSampleSize)
 
             // First check for missing tiles - if there are any we need the base layer underneath to avoid gaps
             var hasMissingTiles = false
-            for ((key, value) in tileMap!!) {
+            tileMap.forEach { (key, value) ->
                 if (key == sampleSize) {
-                    for (tile in value) {
+                    value.forEach { tile ->
                         if (tile.visible && (tile.loading || tile.bitmap == null)) {
                             hasMissingTiles = true
                         }
@@ -955,9 +952,9 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
             }
 
             // Render all loaded tiles. LinkedHashMap used for bottom up rendering - lower res tiles underneath.
-            for ((key, value) in tileMap!!) {
+            tileMap.forEach { (key, value) ->
                 if (key == sampleSize || hasMissingTiles) {
-                    for (tile in value) {
+                    value.forEach { tile ->
                         sourceToViewRect(tile.sRect, tile.vRect)
                         if (!tile.loading && tile.bitmap != null) {
                             if (tileBgPaint != null) {
@@ -1117,11 +1114,11 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
         get() {
             if (bitmap != null) {
                 return true
-            } else if (tileMap != null) {
+            } else if (tileMap.isNotEmpty()) {
                 var baseLayerReady = true
-                for ((key, value) in tileMap!!) {
+                tileMap.forEach { (key, value) ->
                     if (key == fullImageSampleSize) {
-                        for (tile in value) {
+                        value.forEach { tile ->
                             if (tile.loading || tile.bitmap == null) {
                                 baseLayerReady = false
                             }
@@ -1236,7 +1233,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
             fullImageSampleSize /= 2
         }
         initialiseTileMap(maxTileDimensions)
-        val baseGrid = tileMap!![fullImageSampleSize]!!
+        val baseGrid = tileMap[fullImageSampleSize]!!
         for (baseTile in baseGrid) {
             loadTile(baseTile)
         }
@@ -1250,15 +1247,15 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
      * @param load Whether to load the new tiles needed. Use false while scrolling/panning for performance.
      */
     private fun refreshRequiredTiles(load: Boolean) {
-        if (decoder == null || tileMap == null) {
+        if (decoder == null || tileMap.isEmpty()) {
             return
         }
         val sampleSize = calculateInSampleSize(scale).coerceAtMost(fullImageSampleSize)
 
         // Load tiles of the correct sample size that are on screen. Discard tiles off screen, and those that are higher
         // resolution than required, or lower res than required but not the base layer, so the base layer is always present.
-        for ((_, value) in tileMap!!) {
-            for (tile in value) {
+        tileMap.forEach { (_, value) ->
+            value.forEach { tile ->
                 if (tile.sampleSize < sampleSize || tile.sampleSize > sampleSize && tile.sampleSize != fullImageSampleSize) {
                     tile.visible = false
                     tile.bitmap?.recycle()
@@ -1443,7 +1440,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
      */
     private fun initialiseTileMap(maxTileDimensions: Point) {
         debug("initialiseTileMap maxTileDimensions=%dx%d", maxTileDimensions.x, maxTileDimensions.y)
-        tileMap = LinkedHashMap()
+        tileMap.clear()
         var sampleSize = fullImageSampleSize
         var xTiles = 1
         var yTiles = 1
@@ -1480,7 +1477,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
                     tileGrid.add(tile)
                 }
             }
-            tileMap!![sampleSize] = tileGrid
+            tileMap[sampleSize] = tileGrid
             sampleSize /= if (sampleSize == 1) break else 2
         }
     }
