@@ -29,8 +29,6 @@ dependencies {
     implementation 'androidx.annotation:annotation:1.1.0'
     implementation 'com.github.tachiyomiorg:image-decoder:0d43783'
 
-    api "androidx.core:core-ktx:1.6.0"
-
     api "org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutines_version"
     api "org.jetbrains.kotlinx:kotlinx-coroutines-android:$coroutines_version"
 }
