@@ -13,8 +13,8 @@ import java.lang.RuntimeException
 import tachiyomi.decoder.ImageDecoder as TachiyomiDecoder
 
 class ImageDecoder @JvmOverloads constructor(
-    bitmapConfig: Bitmap.Config? = null,
-    private val cropBorders: Boolean
+    private val cropBorders: Boolean,
+    bitmapConfig: Bitmap.Config? = null
 ) : Decoder {
 
     private val bitmapConfig: Bitmap.Config?
@@ -86,7 +86,7 @@ class ImageDecoder @JvmOverloads constructor(
         }
 
     init {
-        val globalBitmapConfig = SubsamplingScaleImageView.getPreferredBitmapConfig()
+        val globalBitmapConfig = SubsamplingScaleImageView.preferredBitmapConfig
         this.bitmapConfig = when {
             bitmapConfig != null -> bitmapConfig
             globalBitmapConfig != null -> globalBitmapConfig
