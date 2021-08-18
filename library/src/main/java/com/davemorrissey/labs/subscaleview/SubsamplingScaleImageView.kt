@@ -238,8 +238,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
 
     // Min scale allowed (prevent infinite zoom)
     private var minScale = minScale()
-    private var sRegion: Rect? = null
-    private var pRegion: Rect? = null
+    private val sRegion = Rect(0, 0, 0, 0)
 
     // Is two-finger zooming in progress
     private var isZooming = false
@@ -334,14 +333,14 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
     fun setImage(imageSource: ImageSource, state: ImageViewState?) {
         reset(true)
         state?.let { restoreState(it) }
-        if (imageSource.bitmap != null && imageSource.sRegion != null) {
+        if (imageSource.bitmap != null && !imageSource.sRegion.isEmpty) {
             onImageLoaded(
                 Bitmap.createBitmap(
                     imageSource.bitmap,
-                    imageSource.sRegion!!.left,
-                    imageSource.sRegion!!.top,
-                    imageSource.sRegion!!.width(),
-                    imageSource.sRegion!!.height()
+                    imageSource.sRegion.left,
+                    imageSource.sRegion.top,
+                    imageSource.sRegion.width(),
+                    imageSource.sRegion.height()
                 ), false
             )
         } else if (imageSource.bitmap != null) {
@@ -349,7 +348,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
         } else {
             // Load the bitmap using tile decoding.
             provider = imageSource.provider
-            sRegion = imageSource.sRegion
+            sRegion.set(imageSource.sRegion)
             initTiles()
         }
     }
@@ -361,13 +360,15 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
             val dimensions = decoder!!.init(context, provider!!)
             var sWidth = dimensions.x
             var sHeight = dimensions.y
-            sRegion?.apply {
-                left = left.coerceAtLeast(0)
-                top = top.coerceAtLeast(0)
-                right = right.coerceAtLeast(sWidth)
-                bottom = bottom.coerceAtLeast(sHeight)
-                sWidth = width()
-                sHeight = height()
+            sRegion.apply {
+                if (!isEmpty) {
+                    left = left.coerceAtLeast(0)
+                    top = top.coerceAtLeast(0)
+                    right = right.coerceAtLeast(sWidth)
+                    bottom = bottom.coerceAtLeast(sHeight)
+                    sWidth = width()
+                    sHeight = height()
+                }
             }
             withContext(Dispatchers.Main) {
                 onTilesInited(decoder!!, sWidth, sHeight)
@@ -425,8 +426,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
             }
             sWidth = 0
             sHeight = 0
-            sRegion = null
-            pRegion = null
+            sRegion.setEmpty()
             isReady = false
             isImageLoaded = false
             bitmap = null
@@ -1682,8 +1682,8 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
         fileSRect(fRect, fRect)
         fRect[fRect.left.coerceAtLeast(0), fRect.top.coerceAtLeast(0), fRect.right.coerceAtLeast(sWidth)] =
             fRect.bottom.coerceAtLeast(sHeight)
-        if (sRegion != null) {
-            fRect.offset(sRegion!!.left, sRegion!!.top)
+        if (!sRegion.isEmpty) {
+            fRect.offset(sRegion.left, sRegion.top)
         }
     }
 

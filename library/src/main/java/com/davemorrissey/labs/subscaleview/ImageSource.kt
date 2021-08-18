@@ -26,7 +26,7 @@ class ImageSource {
     private var sWidth = 0
     private var sHeight = 0
 
-    var sRegion: Rect? = null
+    var sRegion = Rect(0, 0, 0, 0)
         private set
     var isCached = false
         private set
@@ -51,7 +51,7 @@ class ImageSource {
      * @param sRegion the region of the source image to be displayed.
      * @return this instance for chaining.
      */
-    fun region(sRegion: Rect?): ImageSource {
+    fun region(sRegion: Rect): ImageSource {
         this.sRegion = sRegion
         setInvariants()
         return this
@@ -76,9 +76,9 @@ class ImageSource {
     }
 
     private fun setInvariants() {
-        if (sRegion != null) {
-            sWidth = sRegion!!.width()
-            sHeight = sRegion!!.height()
+        if (!sRegion.isEmpty) {
+            sWidth = sRegion.width()
+            sHeight = sRegion.height()
         }
     }
 
