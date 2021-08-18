@@ -71,7 +71,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(
     private val decoderLock: ReadWriteLock = ReentrantReadWriteLock(true)
 
     // Coroutines scope
-    private val scopeMain = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     // Current quickscale state
     private val quickScaleThreshold: Float
@@ -102,17 +102,11 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(
 
     // Overlay tile boundaries and other info
     private var debug = false
+
     /**
-     * Returns the maximum allowed scale.
-     *
-     * @return the maximum scale as a source/view pixels ratio.
-     */
-    /**
-     * Set the maximum scale allowed. A value of 1 means 1:1 pixels at maximum scale. You may wish to set this according
-     * to screen density - on a retina screen, 1:1 may still be too small. Consider using [.setMinimumDpi],
+     * Maximum scale allowed. A value of 1 means 1:1 pixels at maximum scale. You may wish to set this according
+     * to screen density - on a retina screen, 1:1 may still be too small. Consider using [setMinimumDpi],
      * which is density aware.
-     *
-     * @param maxScale maximum scale expressed as a source/view pixels ratio.
      */
     // Max scale allowed (prevent infinite zoom)
     var maxScale = 2F
@@ -136,26 +130,14 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(
 
     // Gesture detection settings
     private var panEnabled = true
-    /**
-     * Returns true if zoom gesture detection is enabled.
-     *
-     * @return true if zoom gesture detection is enabled.
-     */
+
     /**
      * Enable or disable zoom gesture detection. Disabling zoom locks the the current scale.
-     *
-     * @param zoomEnabled true to enable zoom gestures, false to disable.
      */
     var isZoomEnabled = true
-    /**
-     * Returns true if double tap &amp; swipe to zoom is enabled.
-     *
-     * @return true if double tap &amp; swipe to zoom is enabled.
-     */
+
     /**
      * Enable or disable double tap &amp; swipe to zoom.
-     *
-     * @param quickScaleEnabled true to enable quick scale, false to disable.
      */
     var isQuickScaleEnabled = true
 
@@ -178,44 +160,28 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(
     private var vTranslate: PointF? = null
     private var vTranslateStart: PointF? = null
     private var vTranslateBefore: PointF? = null
-    /**
-     * @see .setExtraSpace
-     * @return left extra space in view pixels
-     */
+
     /**
      * Sets left extra space for the view in view pixels.
-     * @see .setExtraSpace
+     * @see setExtraSpace
      */
-    // Extra space that artificially increases size of an image
     var extraSpaceLeft = 0F
 
     /**
-     * @see .setExtraSpace
-     * @return top extra space in view pixels
-     */
-    /**
      * Sets top extra space for the view in view pixels.
-     * @see .setExtraSpace
+     * @see setExtraSpace
      */
     var extraSpaceTop = 0F
 
     /**
-     * @see .setExtraSpace
-     * @return right extra space in view pixels
-     */
-    /**
      * Sets right extra space for the view in view pixels.
-     * @see .setExtraSpace
+     * @see setExtraSpace
      */
     var extraSpaceRight = 0F
 
     /**
-     * @see .setExtraSpace
-     * @return bottom extra space in view pixels
-     */
-    /**
      * Sets bottom extra space for the view in view pixels.
-     * @see .setExtraSpace
+     * @see setExtraSpace
      */
     var extraSpaceBottom = 0F
 
@@ -284,7 +250,6 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(
      *
      * @return true if the view is ready to display an image and accept touch gestures.
      */
-    // Whether a ready notification has been sent to subclasses
     var isReady = false
         private set
 
@@ -294,7 +259,6 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(
      *
      * @return true if the main image (not the preview) has been loaded and is ready to display.
      */
-    // Whether a base layer loaded notification has been sent to subclasses
     var isImageLoaded = false
         private set
 
@@ -376,7 +340,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(
         }
     }
 
-    private fun initTiles() = scopeMain.launch {
+    private fun initTiles() = coroutineScope.launch {
         try {
             debug("initTiles")
             val imageProvider = provider ?: throw IllegalStateException("Image provider not set")
@@ -530,7 +494,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
-        scopeMain.cancel()
+        coroutineScope.cancel()
     }
 
     /**
@@ -647,7 +611,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(
                     vCenterStart!![event.x] = event.y
 
                     // Start long click timer
-                    longClickJob = scopeMain.launch {
+                    longClickJob = coroutineScope.launch {
                         if (onLongClickListener != null) {
                             delay(600)
                             super@SubsamplingScaleImageView.setOnLongClickListener(onLongClickListener)
@@ -1178,7 +1142,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(
         return imageLoaded
     }
 
-    private fun loadTile(tile: Tile) = scopeMain.launch {
+    private fun loadTile(tile: Tile) = coroutineScope.launch {
         try {
             val imageDecoder = decoder ?: return@launch
             if (!imageDecoder.isReady || !tile.visible) return@launch
@@ -1707,20 +1671,14 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(
     fun viewToSourceCoord(vxy: PointF, sTarget: PointF): PointF? {
         return viewToSourceCoord(vxy.x, vxy.y, sTarget)
     }
-    /**
-     * Convert screen coordinate to source coordinate.
-     *
-     * @param vx      view X coordinate.
-     * @param vy      view Y coordinate.
-     * @param sTarget target object for result. The same instance is also returned.
-     * @return source coordinates. This is the same instance passed to the sTarget param.
-     */
+
     /**
      * Convert screen coordinate to source coordinate.
      *
      * @param vx view X coordinate.
      * @param vy view Y coordinate.
-     * @return a coordinate representing the corresponding source coordinate.
+     * @param sTarget target object for result. The same instance is also returned.
+     * @return a coordinate representing the corresponding source coordinate. This is the same instance passed to the sTarget param.
      */
     @JvmOverloads
     fun viewToSourceCoord(vx: Float, vy: Float, sTarget: PointF = PointF()): PointF? {
@@ -1765,20 +1723,14 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(
     fun sourceToViewCoord(sxy: PointF, vTarget: PointF): PointF? {
         return sourceToViewCoord(sxy.x, sxy.y, vTarget)
     }
-    /**
-     * Convert source coordinate to view coordinate.
-     *
-     * @param sx      source X coordinate.
-     * @param sy      source Y coordinate.
-     * @param vTarget target object for result. The same instance is also returned.
-     * @return view coordinates. This is the same instance passed to the vTarget param.
-     */
+
     /**
      * Convert source coordinate to view coordinate.
      *
      * @param sx source X coordinate.
      * @param sy source Y coordinate.
-     * @return view coordinates.
+     * @param vTarget target object for result. The same instance is also returned.
+     * @return view coordinates. This is the same instance passed to the vTarget param.
      */
     @JvmOverloads
     fun sourceToViewCoord(sx: Float, sy: Float, vTarget: PointF = PointF()): PointF? {
@@ -2778,20 +2730,11 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(
         private val TAG = SubsamplingScaleImageView::class.java.simpleName
 
         /**
-         * Get the current preferred configuration for decoding bitmaps. [Decoder]
-         * instances can read this and use it when decoding images.
-         *
-         * @return the preferred bitmap configuration, or null if none has been set.
-         */
-        /**
-         * Set a global preferred bitmap config shared by all view instances and applied to new instances
+         * Global preferred bitmap config shared by all view instances and applied to new instances
          * initialised after the call is made. This is a hint only; the bundled [Decoder]
          * classes all respect this (except when they were constructed with
          * an instance-specific config) but custom decoder classes will not.
-         *
-         * @param preferredBitmapConfig the bitmap configuration to be used by future instances of the view. Pass null to restore the default.
          */
-        // A global preference for bitmap format, available to decoder classes that respect it
         var preferredBitmapConfig: Bitmap.Config? = null
     }
 
