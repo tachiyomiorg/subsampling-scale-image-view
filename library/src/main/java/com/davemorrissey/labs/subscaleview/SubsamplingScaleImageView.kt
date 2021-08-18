@@ -302,14 +302,32 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
     private var onLongClickListener: OnLongClickListener? = null
 
     // Paint objects created once and reused for efficiency
-    private var bitmapPaint: Paint? = null
-    private var debugTextPaint: Paint? = null
-    private var debugLinePaint: Paint? = null
+    private val bitmapPaint by lazy {
+        Paint().apply {
+            isAntiAlias = true
+            isFilterBitmap = true
+            isDither = true
+        }
+    }
+    private val debugTextPaint by lazy {
+        Paint().apply {
+            textSize = px(12).toFloat()
+            color = Color.MAGENTA
+            style = Paint.Style.FILL
+        }
+    }
+    private val debugLinePaint by lazy {
+        Paint().apply {
+            color = Color.MAGENTA
+            style = Paint.Style.STROKE
+            strokeWidth = px(1).toFloat()
+        }
+    }
     private var tileBgPaint: Paint? = null
 
     // Volatile fields used to reduce object creation
     private var satTemp: ScaleAndTranslate? = null
-    private var mtrx: Matrix? = null
+    private val mtrx = Matrix()
     private var sRect: RectF? = null
 
     /**
@@ -407,7 +425,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
         quickScaleVStart = null
         anim = null
         satTemp = null
-        mtrx = null
+        mtrx.reset()
         sRect = null
         if (newImage) {
             provider = null
@@ -861,7 +879,6 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
      */
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        createPaints()
 
         // If image or view dimensions are not known yet, abort.
         if (sWidth == 0 || sHeight == 0 || width == 0 || height == 0) {
@@ -957,13 +974,10 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
                     value.forEach { tile ->
                         sourceToViewRect(tile.sRect, tile.vRect)
                         if (!tile.loading && tile.bitmap != null) {
-                            if (tileBgPaint != null) {
-                                canvas.drawRect(tile.vRect, tileBgPaint!!)
+                            tileBgPaint?.let {
+                                canvas.drawRect(tile.vRect, it)
                             }
-                            if (mtrx == null) {
-                                mtrx = Matrix()
-                            }
-                            mtrx!!.reset()
+                            mtrx.reset()
                             setMatrixArray(
                                 srcArray,
                                 0f,
@@ -986,17 +1000,17 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
                                 tile.vRect.left.toFloat(),
                                 tile.vRect.bottom.toFloat()
                             )
-                            mtrx!!.setPolyToPoly(srcArray, 0, dstArray, 0, 4)
-                            canvas.drawBitmap(tile.bitmap!!, mtrx!!, bitmapPaint)
+                            mtrx.setPolyToPoly(srcArray, 0, dstArray, 0, 4)
+                            canvas.drawBitmap(tile.bitmap!!, mtrx, bitmapPaint)
                             if (debug) {
-                                canvas.drawRect(tile.vRect, debugLinePaint!!)
+                                canvas.drawRect(tile.vRect, debugLinePaint)
                             }
                         } else if (tile.loading && debug) {
                             canvas.drawText(
                                 "LOADING",
                                 (tile.vRect.left + px(5)).toFloat(),
                                 (tile.vRect.top + px(35)).toFloat(),
-                                debugTextPaint!!
+                                debugTextPaint
                             )
                         }
                         if (tile.visible && debug) {
@@ -1004,7 +1018,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
                                 "ISS " + tile.sampleSize + " RECT " + tile.sRect.top + "," + tile.sRect.left + "," + tile.sRect.bottom + "," + tile.sRect.right,
                                 (tile.vRect.left + px(5)).toFloat(),
                                 (tile.vRect.top + px(15)).toFloat(),
-                                debugTextPaint!!
+                                debugTextPaint
                             )
                         }
                     }
@@ -1013,21 +1027,18 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
         } else if (bitmap != null && !bitmap!!.isRecycled) {
             val xScale = scale
             val yScale = scale
-            if (mtrx == null) {
-                mtrx = Matrix()
-            }
-            mtrx!!.reset()
-            mtrx!!.postScale(xScale, yScale)
-            mtrx!!.postTranslate(vTranslate!!.x, vTranslate!!.y)
-            if (tileBgPaint != null) {
+            mtrx.reset()
+            mtrx.postScale(xScale, yScale)
+            mtrx.postTranslate(vTranslate!!.x, vTranslate!!.y)
+            tileBgPaint?.let {
                 if (sRect == null) {
                     sRect = RectF()
                 }
                 sRect!![0f, 0f, sWidth.toFloat()] = sHeight.toFloat()
-                mtrx!!.mapRect(sRect)
-                canvas.drawRect(sRect!!, tileBgPaint!!)
+                mtrx.mapRect(sRect)
+                canvas.drawRect(sRect!!, it)
             }
-            canvas.drawBitmap(bitmap!!, mtrx!!, bitmapPaint)
+            canvas.drawBitmap(bitmap!!, mtrx, bitmapPaint)
         }
         if (debug) {
             canvas.drawText(
@@ -1037,49 +1048,49 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
                     minScale()
                 ) + " - " + String.format(
                     Locale.ENGLISH, "%.2f", maxScale
-                ) + ")", px(5).toFloat(), px(15).toFloat(), debugTextPaint!!
+                ) + ")", px(5).toFloat(), px(15).toFloat(), debugTextPaint
             )
             canvas.drawText(
                 "Translate: " + String.format(Locale.ENGLISH, "%.2f", vTranslate!!.x) + ":" + String.format(
                     Locale.ENGLISH, "%.2f", vTranslate!!.y
-                ), px(5).toFloat(), px(30).toFloat(), debugTextPaint!!
+                ), px(5).toFloat(), px(30).toFloat(), debugTextPaint
             )
             val center = center
             canvas.drawText(
                 "Source center: " + String.format(Locale.ENGLISH, "%.2f", center!!.x) + ":" + String.format(
                     Locale.ENGLISH, "%.2f", center.y
-                ), px(5).toFloat(), px(45).toFloat(), debugTextPaint!!
+                ), px(5).toFloat(), px(45).toFloat(), debugTextPaint
             )
             if (anim != null) {
                 val vCenterStart = sourceToViewCoord(anim!!.sCenterStart)
                 val vCenterEndRequested = sourceToViewCoord(anim!!.sCenterEndRequested)
                 val vCenterEnd = sourceToViewCoord(anim!!.sCenterEnd)
-                canvas.drawCircle(vCenterStart!!.x, vCenterStart.y, px(10).toFloat(), debugLinePaint!!)
-                debugLinePaint!!.color = Color.RED
-                canvas.drawCircle(vCenterEndRequested!!.x, vCenterEndRequested.y, px(20).toFloat(), debugLinePaint!!)
-                debugLinePaint!!.color = Color.BLUE
-                canvas.drawCircle(vCenterEnd!!.x, vCenterEnd.y, px(25).toFloat(), debugLinePaint!!)
-                debugLinePaint!!.color = Color.CYAN
-                canvas.drawCircle((width / 2).toFloat(), (height / 2).toFloat(), px(30).toFloat(), debugLinePaint!!)
+                canvas.drawCircle(vCenterStart!!.x, vCenterStart.y, px(10).toFloat(), debugLinePaint)
+                debugLinePaint.color = Color.RED
+                canvas.drawCircle(vCenterEndRequested!!.x, vCenterEndRequested.y, px(20).toFloat(), debugLinePaint)
+                debugLinePaint.color = Color.BLUE
+                canvas.drawCircle(vCenterEnd!!.x, vCenterEnd.y, px(25).toFloat(), debugLinePaint)
+                debugLinePaint.color = Color.CYAN
+                canvas.drawCircle((width / 2).toFloat(), (height / 2).toFloat(), px(30).toFloat(), debugLinePaint)
             }
             if (vCenterStart != null) {
-                debugLinePaint!!.color = Color.RED
-                canvas.drawCircle(vCenterStart!!.x, vCenterStart!!.y, px(20).toFloat(), debugLinePaint!!)
+                debugLinePaint.color = Color.RED
+                canvas.drawCircle(vCenterStart!!.x, vCenterStart!!.y, px(20).toFloat(), debugLinePaint)
             }
             if (quickScaleSCenter != null) {
-                debugLinePaint!!.color = Color.BLUE
+                debugLinePaint.color = Color.BLUE
                 canvas.drawCircle(
                     sourceToViewX(quickScaleSCenter!!.x),
                     sourceToViewY(quickScaleSCenter!!.y),
                     px(35).toFloat(),
-                    debugLinePaint!!
+                    debugLinePaint
                 )
             }
             if (quickScaleVStart != null && isQuickScaling) {
-                debugLinePaint!!.color = Color.CYAN
-                canvas.drawCircle(quickScaleVStart!!.x, quickScaleVStart!!.y, px(30).toFloat(), debugLinePaint!!)
+                debugLinePaint.color = Color.CYAN
+                canvas.drawCircle(quickScaleVStart!!.x, quickScaleVStart!!.y, px(30).toFloat(), debugLinePaint)
             }
-            debugLinePaint!!.color = Color.MAGENTA
+            debugLinePaint.color = Color.MAGENTA
         }
     }
 
@@ -1159,31 +1170,6 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
             onImageEventListener?.onImageLoaded()
         }
         return imageLoaded
-    }
-
-    /**
-     * Creates Paint objects once when first needed.
-     */
-    private fun createPaints() {
-        if (bitmapPaint == null) {
-            bitmapPaint = Paint().apply {
-                isAntiAlias = true
-                isFilterBitmap = true
-                isDither = true
-            }
-        }
-        if ((debugTextPaint == null || debugLinePaint == null) && debug) {
-            debugTextPaint = Paint().apply {
-                textSize = px(12).toFloat()
-                color = Color.MAGENTA
-                style = Paint.Style.FILL
-            }
-            debugLinePaint = Paint().apply {
-                color = Color.MAGENTA
-                style = Paint.Style.STROKE
-                strokeWidth = px(1).toFloat()
-            }
-        }
     }
 
     private fun loadTile(tile: Tile) = scopeMain.launch {
@@ -1630,9 +1616,6 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
      */
     fun recycle() {
         reset(true)
-        bitmapPaint = null
-        debugTextPaint = null
-        debugLinePaint = null
         tileBgPaint = null
     }
 
