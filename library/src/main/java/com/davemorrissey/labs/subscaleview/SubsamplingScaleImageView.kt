@@ -41,6 +41,11 @@ import java.util.Locale
 import java.util.concurrent.locks.ReadWriteLock
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.Exception
+import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.roundToInt
+import kotlin.math.sqrt
 
 /**
  *
@@ -80,7 +85,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
     private val dstArray = FloatArray(8)
 
     //The logical density of the display
-    private val density: Float
+    private val density: Float = resources.displayMetrics.density
 
     // Bitmap (preview or full image)
     private var bitmap: Bitmap? = null
@@ -331,9 +336,6 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
      * @param state       State to be restored. Nullable.
      */
     fun setImage(imageSource: ImageSource, state: ImageViewState?) {
-        if (imageSource == null) {
-            throw NullPointerException("imageSource must not be null")
-        }
         reset(true)
         state?.let { restoreState(it) }
         if (imageSource.bitmap != null && imageSource.sRegion != null) {
@@ -452,17 +454,15 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
     private fun setGestureDetector(context: Context) {
         detector = GestureDetector(context, object : GestureDetector.SimpleOnGestureListener() {
             override fun onFling(e1: MotionEvent, e2: MotionEvent, velocityX: Float, velocityY: Float): Boolean {
-                if (panEnabled && isReady && vTranslate != null && e1 != null && e2 != null && (Math.abs(e1.x - e2.x) > 50 || Math.abs(
-                        e1.y - e2.y
-                    ) > 50) && (Math.abs(velocityX) > 500 || Math.abs(velocityY) > 500) && !isZooming
-                ) {
+                if (panEnabled && isReady && vTranslate != null && (abs(e1.x - e2.x) > 50 || abs(e1.y - e2.y) > 50) && (abs(velocityX) > 500 || abs(velocityY) > 500) && !isZooming) {
                     val vTranslateEnd = PointF(vTranslate!!.x + velocityX * 0.25f, vTranslate!!.y + velocityY * 0.25f)
                     val sCenterXEnd = (width / 2 - vTranslateEnd.x) / scale
                     val sCenterYEnd = (height / 2 - vTranslateEnd.y) / scale
-                    AnimationBuilder(PointF(sCenterXEnd, sCenterYEnd)).withEasing(EASE_OUT_QUAD).withPanLimited(false)
-                        .withOrigin(
-                            ORIGIN_FLING
-                        ).start()
+                    AnimationBuilder(PointF(sCenterXEnd, sCenterYEnd))
+                        .withEasing(EASE_OUT_QUAD)
+                        .withPanLimited(false)
+                        .withOrigin(ORIGIN_FLING)
+                        .start()
                     return true
                 }
                 return super.onFling(e1, e2, velocityX, velocityY)
@@ -551,8 +551,8 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
                 width = (sWidth.toDouble() / sHeight.toDouble() * height).toInt()
             }
         }
-        width = Math.max(width, suggestedMinimumWidth)
-        height = Math.max(height, suggestedMinimumHeight)
+        width = width.coerceAtLeast(suggestedMinimumWidth)
+        height = height.coerceAtLeast(suggestedMinimumHeight)
         setMeasuredDimension(width, height)
     }
 
@@ -613,7 +613,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_1_DOWN, MotionEvent.ACTION_POINTER_2_DOWN -> {
                 anim = null
                 requestDisallowInterceptTouchEvent(true)
-                maxTouchCount = Math.max(maxTouchCount, touchCount)
+                maxTouchCount = maxTouchCount.coerceAtLeast(touchCount)
                 if (touchCount >= 2) {
                     if (isZoomEnabled) {
                         // Start pinch to zoom. Calculate distance between touch points and center point of the pinch.
@@ -653,18 +653,12 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
                         val vDistEnd = distance(event.getX(0), event.getX(1), event.getY(0), event.getY(1))
                         val vCenterEndX = (event.getX(0) + event.getX(1)) / 2
                         val vCenterEndY = (event.getY(0) + event.getY(1)) / 2
-                        if (isZoomEnabled && (distance(
-                                vCenterStart!!.x,
-                                vCenterEndX,
-                                vCenterStart!!.y,
-                                vCenterEndY
-                            ) > 5 || Math.abs(vDistEnd - vDistStart) > 5 || isPanning)
-                        ) {
+                        if (isZoomEnabled && (distance(vCenterStart!!.x, vCenterEndX, vCenterStart!!.y, vCenterEndY) > 5 || abs(vDistEnd - vDistStart) > 5 || isPanning)) {
                             isZooming = true
                             isPanning = true
                             consumed = true
                             val previousScale = scale.toDouble()
-                            scale = Math.min(maxScale, vDistEnd / vDistStart * scaleStart)
+                            scale = (vDistEnd / vDistStart * scaleStart).coerceAtMost(maxScale)
                             if (scale <= minScale()) {
                                 // Minimum scale reached so don't pan. Adjust start settings so any expand will zoom in.
                                 vDistStart = vDistEnd
@@ -702,13 +696,13 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
                     } else if (isQuickScaling) {
                         // One finger zoom
                         // Stole Google's Magical Formula™ to make sure it feels the exact same
-                        var dist = Math.abs(quickScaleVStart!!.y - event.y) * 2 + quickScaleThreshold
+                        var dist = abs(quickScaleVStart!!.y - event.y) * 2 + quickScaleThreshold
                         if (quickScaleLastDistance == -1f) {
                             quickScaleLastDistance = dist
                         }
                         val isUpwards = event.y > quickScaleVLastPoint!!.y
                         quickScaleVLastPoint!![0f] = event.y
-                        val spanDiff = Math.abs(1 - dist / quickScaleLastDistance) * 0.5f
+                        val spanDiff = abs(1 - dist / quickScaleLastDistance) * 0.5f
                         if (spanDiff > 0.03f || quickScaleMoved) {
                             quickScaleMoved = true
                             var multiplier = 1f
@@ -716,7 +710,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
                                 multiplier = if (isUpwards) 1 + spanDiff else 1 - spanDiff
                             }
                             val previousScale = scale.toDouble()
-                            scale = Math.max(minScale(), Math.min(maxScale, scale * multiplier))
+                            scale = (scale * multiplier).coerceIn(minScale(), maxScale)
                             if (panEnabled) {
                                 val vLeftStart = vCenterStart!!.x - vTranslateStart!!.x
                                 val vTopStart = vCenterStart!!.y - vTranslateStart!!.y
@@ -748,8 +742,8 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
                     } else if (!isZooming) {
                         // One finger pan - translate the image. We do this calculation even with pan disabled so click
                         // and long click behaviour is preserved.
-                        val dx = Math.abs(event.x - vCenterStart!!.x)
-                        val dy = Math.abs(event.y - vCenterStart!!.y)
+                        val dx = abs(event.x - vCenterStart!!.x)
+                        val dy = abs(event.y - vCenterStart!!.y)
 
                         //On the Samsung S6 long click event does not work, because the dx > 5 usually true
                         val offset = density * 5
@@ -852,7 +846,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
                 sCenter.y = (sHeight / 2).toFloat()
             }
         }
-        val doubleTapZoomScale = Math.min(maxScale, doubleTapZoomScale)
+        val doubleTapZoomScale = doubleTapZoomScale.coerceAtMost(maxScale)
         val zoomIn = scale <= doubleTapZoomScale * 0.9 || scale == minScale
         val targetScale = if (zoomIn) doubleTapZoomScale else minScale()
         if (doubleTapZoomStyle == ZOOM_FOCUS_CENTER_IMMEDIATE) {
@@ -909,7 +903,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
             vTranslateBefore!!.set(vTranslate!!)
             var scaleElapsed = System.currentTimeMillis() - anim!!.time
             val finished = scaleElapsed > anim!!.duration
-            scaleElapsed = Math.min(scaleElapsed, anim!!.duration)
+            scaleElapsed = scaleElapsed.coerceAtMost(anim!!.duration)
             scale = ease(
                 anim!!.easing,
                 scaleElapsed,
@@ -954,9 +948,8 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
             invalidate()
         }
         if (tileMap != null && isBaseLayerReady) {
-
             // Optimum sample size for current scale
-            val sampleSize = Math.min(fullImageSampleSize, calculateInSampleSize(scale))
+            val sampleSize = calculateInSampleSize(scale).coerceAtMost(fullImageSampleSize)
 
             // First check for missing tiles - if there are any we need the base layer underneath to avoid gaps
             var hasMissingTiles = false
@@ -1270,7 +1263,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
         if (decoder == null || tileMap == null) {
             return
         }
-        val sampleSize = Math.min(fullImageSampleSize, calculateInSampleSize(scale))
+        val sampleSize = calculateInSampleSize(scale).coerceAtMost(fullImageSampleSize)
 
         // Load tiles of the correct sample size that are on screen. Discard tiles off screen, and those that are higher
         // resolution than required, or lower res than required but not the base layer, so the base layer is always present.
@@ -1361,8 +1354,8 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
         if (sHeight > reqHeight || sWidth > reqWidth) {
 
             // Calculate ratios of height and width to requested height and width
-            val heightRatio = Math.round(sHeight.toFloat() / reqHeight.toFloat())
-            val widthRatio = Math.round(sWidth.toFloat() / reqWidth.toFloat())
+            val heightRatio = (sHeight.toFloat() / reqHeight.toFloat()).roundToInt()
+            val widthRatio = (sWidth.toFloat() / reqWidth.toFloat()).roundToInt()
 
             // Choose the smallest ratio as inSampleSize value, this will guarantee
             // a final image with both dimensions larger than or equal to the
@@ -1401,14 +1394,14 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
         val extraTop: Float = if (extra) extraSpaceTop else 0F
         val extraBottom: Float = if (extra) extraSpaceBottom else 0F
         if (panLimit == PAN_LIMIT_CENTER && isReady) {
-            vTranslate.x = Math.max(vTranslate.x, width / 2 - scaleWidth)
-            vTranslate.y = Math.max(vTranslate.y, height / 2 - scaleHeight)
+            vTranslate.x = vTranslate.x.coerceAtLeast(width / 2 - scaleWidth)
+            vTranslate.y = vTranslate.y.coerceAtLeast(height / 2 - scaleHeight)
         } else if (center) {
-            vTranslate.x = Math.max(vTranslate.x, width - scaleWidth - extraRight)
-            vTranslate.y = Math.max(vTranslate.y, height - scaleHeight - extraBottom)
+            vTranslate.x = vTranslate.x.coerceAtLeast(width - scaleWidth - extraRight)
+            vTranslate.y = vTranslate.y.coerceAtLeast(height - scaleHeight - extraBottom)
         } else {
-            vTranslate.x = Math.max(vTranslate.x, -scaleWidth - extraRight)
-            vTranslate.y = Math.max(vTranslate.y, -scaleHeight - extraBottom)
+            vTranslate.x = vTranslate.x.coerceAtLeast(-scaleWidth - extraRight)
+            vTranslate.y = vTranslate.y.coerceAtLeast(-scaleHeight - extraBottom)
         }
 
         // Asymmetric padding adjustments
@@ -1419,17 +1412,17 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
         val maxTx: Float
         val maxTy: Float
         if (panLimit == PAN_LIMIT_CENTER && isReady) {
-            maxTx = Math.max(0, width / 2).toFloat()
-            maxTy = Math.max(0, height / 2).toFloat()
+            maxTx = (width / 2F).coerceAtLeast(0F)
+            maxTy = (height / 2F).coerceAtLeast(0F)
         } else if (center) {
-            maxTx = Math.max(extraLeft, (width - scaleWidth) * xPaddingRatio)
-            maxTy = Math.max(extraTop, (height - scaleHeight) * yPaddingRatio)
+            maxTx = ((width - scaleWidth) * xPaddingRatio).coerceAtLeast(extraLeft)
+            maxTy = ((height - scaleHeight) * yPaddingRatio).coerceAtLeast(extraTop)
         } else {
-            maxTx = Math.max(extraLeft, width.toFloat())
-            maxTy = Math.max(extraTop, height.toFloat())
+            maxTx = width.toFloat().coerceAtLeast(extraLeft)
+            maxTy = height.toFloat().coerceAtLeast(extraTop)
         }
-        vTranslate.x = Math.min(vTranslate.x, maxTx)
-        vTranslate.y = Math.min(vTranslate.y, maxTy)
+        vTranslate.x = vTranslate.x.coerceAtMost(maxTx)
+        vTranslate.y = vTranslate.y.coerceAtMost(maxTy)
         sat.scale = scale
     }
 
@@ -1627,8 +1620,8 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
      */
     private fun getMaxBitmapDimensions(canvas: Canvas): Point {
         return Point(
-            Math.min(canvas.maximumBitmapWidth, maxTileWidth),
-            Math.min(canvas.maximumBitmapHeight, maxTileHeight)
+            canvas.maximumBitmapWidth.coerceAtMost(maxTileWidth),
+            canvas.maximumBitmapHeight.coerceAtMost(maxTileHeight)
         )
     }
 
@@ -1647,7 +1640,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
     private fun distance(x0: Float, x1: Float, y0: Float, y1: Float): Float {
         val x = x0 - x1
         val y = y0 - y1
-        return Math.sqrt((x * x + y * y).toDouble()).toFloat()
+        return sqrt((x * x + y * y).toDouble()).toFloat()
     }
 
     /**
@@ -1704,8 +1697,8 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
             vRect.right.toFloat()
         ).toInt()] = viewToSourceY(vRect.bottom.toFloat()).toInt()
         fileSRect(fRect, fRect)
-        fRect[Math.max(0, fRect.left), Math.max(0, fRect.top), Math.min(sWidth, fRect.right)] =
-            Math.min(sHeight, fRect.bottom)
+        fRect[fRect.left.coerceAtLeast(0), fRect.top.coerceAtLeast(0), fRect.right.coerceAtLeast(sWidth)] =
+            fRect.bottom.coerceAtLeast(sHeight)
         if (sRegion != null) {
             fRect.offset(sRegion!!.left, sRegion!!.top)
         }
@@ -1877,16 +1870,16 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
      */
     private fun minScale(): Float {
         val extra = panLimit == PAN_LIMIT_INSIDE
-        val vExtra = if (extra) Math.round(extraSpaceBottom + extraSpaceTop) else 0
-        val hExtra = if (extra) Math.round(extraSpaceLeft + extraSpaceRight) else 0
+        val vExtra = if (extra) (extraSpaceBottom + extraSpaceTop).roundToInt() else 0
+        val hExtra = if (extra) (extraSpaceLeft + extraSpaceRight).roundToInt() else 0
         val vPadding = paddingBottom + paddingTop + vExtra
         val hPadding = paddingLeft + paddingRight + hExtra
         return when (minimumScaleType) {
-            SCALE_TYPE_CENTER_INSIDE -> Math.min(
+            SCALE_TYPE_CENTER_INSIDE -> min(
                 (width - hPadding) / sWidth.toFloat(),
                 (height - vPadding) / sHeight.toFloat()
             )
-            SCALE_TYPE_CENTER_CROP -> Math.max(
+            SCALE_TYPE_CENTER_CROP -> max(
                 (width - hPadding) / sWidth.toFloat(),
                 (height - vPadding) / sHeight.toFloat()
             )
@@ -1901,7 +1894,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
                 (height - vPadding) / sHeight.toFloat()
             }
             SCALE_TYPE_CUSTOM -> minScale
-            else -> Math.min((width - hPadding) / sWidth.toFloat(), (height - vPadding) / sHeight.toFloat())
+            else -> min((width - hPadding) / sWidth.toFloat(), (height - vPadding) / sHeight.toFloat())
         }
     }
 
@@ -1909,10 +1902,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
      * Adjust a requested scale to be within the allowed limits.
      */
     private fun limitedScale(targetScale: Float): Float {
-        var targetScale = targetScale
-        targetScale = Math.max(minScale(), targetScale)
-        targetScale = Math.min(maxScale, targetScale)
-        return targetScale
+        return targetScale.coerceIn(minScale(), maxScale)
     }
 
     /**
@@ -1997,20 +1987,20 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
         val scaleWidth = scale * sWidth
         val scaleHeight = scale * sHeight
         if (panLimit == PAN_LIMIT_CENTER) {
-            vTarget.top = Math.max(0f, -(vTranslate!!.y - height / 2))
-            vTarget.left = Math.max(0f, -(vTranslate!!.x - width / 2))
-            vTarget.bottom = Math.max(0f, vTranslate!!.y - (height / 2 - scaleHeight))
-            vTarget.right = Math.max(0f, vTranslate!!.x - (width / 2 - scaleWidth))
+            vTarget.top = -(vTranslate!!.y - height / 2).coerceAtLeast(0F)
+            vTarget.left = -(vTranslate!!.x - width / 2).coerceAtLeast(0F)
+            vTarget.bottom = (vTranslate!!.y - (height / 2 - scaleHeight)).coerceAtLeast(0F)
+            vTarget.right = (vTranslate!!.x - (width / 2 - scaleWidth)).coerceAtLeast(0F)
         } else if (panLimit == PAN_LIMIT_OUTSIDE) {
-            vTarget.top = Math.max(0f, -(vTranslate!!.y - height))
-            vTarget.left = Math.max(0f, -(vTranslate!!.x - width))
-            vTarget.bottom = Math.max(0f, vTranslate!!.y + scaleHeight)
-            vTarget.right = Math.max(0f, vTranslate!!.x + scaleWidth)
+            vTarget.top = -(vTranslate!!.y - height).coerceAtLeast(0F)
+            vTarget.left = -(vTranslate!!.x - width).coerceAtLeast(0F)
+            vTarget.bottom = (vTranslate!!.y + scaleHeight).coerceAtLeast(0F)
+            vTarget.right = (vTranslate!!.x + scaleWidth).coerceAtLeast(0F)
         } else {
-            vTarget.top = Math.max(0f, -vTranslate!!.y)
-            vTarget.left = Math.max(0f, -vTranslate!!.x)
-            vTarget.bottom = Math.max(0f, scaleHeight + vTranslate!!.y - height)
-            vTarget.right = Math.max(0f, scaleWidth + vTranslate!!.x - width)
+            vTarget.top = -vTranslate!!.y.coerceAtLeast(0F)
+            vTarget.left = -vTranslate!!.x.coerceAtLeast(0F)
+            vTarget.bottom = (scaleHeight + vTranslate!!.y - height).coerceAtLeast(0F)
+            vTarget.right = (scaleWidth + vTranslate!!.x - width).coerceAtLeast(0F)
         }
     }
 
@@ -2098,7 +2088,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
     fun setMinimumTileDpi(minimumTileDpi: Int) {
         val metrics = resources.displayMetrics
         val averageDpi = (metrics.xdpi + metrics.ydpi) / 2
-        this.minimumTileDpi = Math.min(averageDpi, minimumTileDpi.toFloat()).toInt()
+        this.minimumTileDpi = minimumTileDpi.coerceAtMost(averageDpi.roundToInt())
         if (isReady) {
             reset(false)
             invalidate()
@@ -2278,7 +2268,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
      * @param durationMs Duration in milliseconds.
      */
     fun setDoubleTapZoomDuration(durationMs: Int) {
-        doubleTapZoomDuration = Math.max(0, durationMs)
+        doubleTapZoomDuration = durationMs.coerceAtLeast(0)
     }
 
     /**
@@ -2824,7 +2814,6 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
     }
 
     init {
-        density = resources.displayMetrics.density
         setMinimumDpi(160)
         setDoubleTapZoomDpi(160)
         setGestureDetector(context)
