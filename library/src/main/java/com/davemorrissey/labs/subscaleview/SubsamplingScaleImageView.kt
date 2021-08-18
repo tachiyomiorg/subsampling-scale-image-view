@@ -2347,7 +2347,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(
          *
          * @param e The exception thrown. This error is also logged by the view.
          */
-        fun onImageLoadError(e: Exception?)
+        fun onImageLoadError(e: Exception)
 
         /**
          * Called when an image tile could not be loaded. This method cannot be relied upon; certain
@@ -2357,7 +2357,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(
          *
          * @param e The exception thrown. This error is logged by the view.
          */
-        fun onTileLoadError(e: Exception?)
+        fun onTileLoadError(e: Exception)
     }
 
     /**
@@ -2432,7 +2432,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(
     /**
      * Default implementation of [OnAnimationEventListener] for extension. This does nothing in any method.
      */
-    class DefaultOnAnimationEventListener : OnAnimationEventListener {
+    open class DefaultOnAnimationEventListener : OnAnimationEventListener {
         override fun onComplete() {}
         override fun onInterruptedByUser() {}
         override fun onInterruptedByNewAnim() {}
@@ -2441,17 +2441,17 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(
     /**
      * Default implementation of [OnImageEventListener] for extension. This does nothing in any method.
      */
-    class DefaultOnImageEventListener : OnImageEventListener {
+    open class DefaultOnImageEventListener : OnImageEventListener {
         override fun onReady() {}
         override fun onImageLoaded() {}
-        override fun onImageLoadError(e: Exception?) {}
-        override fun onTileLoadError(e: Exception?) {}
+        override fun onImageLoadError(e: Exception) {}
+        override fun onTileLoadError(e: Exception) {}
     }
 
     /**
      * Default implementation of [OnStateChangedListener]. This does nothing in any method.
      */
-    class DefaultOnStateChangedListener : OnStateChangedListener {
+    open class DefaultOnStateChangedListener : OnStateChangedListener {
         override fun onCenterChanged(newCenter: PointF?, origin: Int) {}
         override fun onScaleChanged(newScale: Float, origin: Int) {}
     }
