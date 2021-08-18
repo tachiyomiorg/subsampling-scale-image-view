@@ -328,7 +328,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
     // Volatile fields used to reduce object creation
     private var satTemp: ScaleAndTranslate? = null
     private val mtrx = Matrix()
-    private var sRect: RectF? = null
+    private val sRect = RectF()
 
     /**
      * Set the image source from a bitmap, resource, asset, file or other URI.
@@ -426,7 +426,7 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
         anim = null
         satTemp = null
         mtrx.reset()
-        sRect = null
+        sRect.setEmpty()
         if (newImage) {
             provider = null
             decoderLock.writeLock().lock()
@@ -1031,12 +1031,10 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(context: Context,
             mtrx.postScale(xScale, yScale)
             mtrx.postTranslate(vTranslate!!.x, vTranslate!!.y)
             tileBgPaint?.let {
-                if (sRect == null) {
-                    sRect = RectF()
-                }
-                sRect!![0f, 0f, sWidth.toFloat()] = sHeight.toFloat()
+                sRect.setEmpty()
+                sRect[0f, 0f, sWidth.toFloat()] = sHeight.toFloat()
                 mtrx.mapRect(sRect)
-                canvas.drawRect(sRect!!, it)
+                canvas.drawRect(sRect, it)
             }
             canvas.drawBitmap(bitmap!!, mtrx, bitmapPaint)
         }
