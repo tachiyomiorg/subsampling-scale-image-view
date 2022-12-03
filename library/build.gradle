@@ -1,15 +1,16 @@
 apply plugin: 'com.android.library'
+apply plugin: 'org.jetbrains.kotlin.android'
 
 group = 'com.davemorrissey.labs'
 archivesBaseName = 'subsampling-scale-image-view-androidx'
 version = '3.10.0'
 
 android {
-    compileSdkVersion 30
+    compileSdkVersion 31
 
     defaultConfig {
         minSdkVersion 21
-        targetSdkVersion 30
+        targetSdkVersion 31
 
         versionCode = 1
         versionName = "1.0"
@@ -23,9 +24,13 @@ configurations {
 }
 
 dependencies {
-    javadocs 'androidx.annotation:annotation:1.1.0'
-    implementation 'androidx.annotation:annotation:1.1.0'
-    implementation 'com.github.tachiyomiorg:image-decoder:0d43783'
+    api "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
+    javadocs 'androidx.annotation:annotation:1.2.0'
+    implementation 'androidx.annotation:annotation:1.2.0'
+    implementation 'com.github.tachiyomiorg:image-decoder:7481a4a'
+
+    api "org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutines_version"
+    api "org.jetbrains.kotlinx:kotlinx-coroutines-android:$coroutines_version"
 }
 
 task javadoc(type: Javadoc) {
