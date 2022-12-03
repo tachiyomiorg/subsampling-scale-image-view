@@ -23,7 +23,7 @@
 
     </RelativeLayout>
 
-    <androidx.core.view.ViewPager
+    <androidx.viewpager.widget.ViewPager
         android:id="@+id/horizontal_pager"
         style="@style/mainPanel"
         android:visibility="gone" />
