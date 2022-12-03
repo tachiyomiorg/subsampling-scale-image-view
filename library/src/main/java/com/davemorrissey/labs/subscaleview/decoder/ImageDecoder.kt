@@ -20,6 +20,15 @@ class ImageDecoder @JvmOverloads constructor(
     private val bitmapConfig: Bitmap.Config?
     private var decoder: TachiyomiDecoder? = null
 
+    init {
+        val globalBitmapConfig = SubsamplingScaleImageView.preferredBitmapConfig
+        this.bitmapConfig = when {
+            bitmapConfig != null -> bitmapConfig
+            globalBitmapConfig != null -> globalBitmapConfig
+            else -> Bitmap.Config.RGB_565
+        }
+    }
+
     /**
      * Initialise the decoder. When possible, perform initial setup work once in this method. The
      * dimensions of the image must be returned.
@@ -84,13 +93,4 @@ class ImageDecoder @JvmOverloads constructor(
             }
             return rgb565
         }
-
-    init {
-        val globalBitmapConfig = SubsamplingScaleImageView.preferredBitmapConfig
-        this.bitmapConfig = when {
-            bitmapConfig != null -> bitmapConfig
-            globalBitmapConfig != null -> globalBitmapConfig
-            else -> Bitmap.Config.RGB_565
-        }
-    }
 }

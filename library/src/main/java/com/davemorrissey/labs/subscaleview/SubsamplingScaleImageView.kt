@@ -43,8 +43,6 @@ import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
 /**
- *
- *
  * Displays an image subsampled as necessary to avoid loading too much image data into memory. After zooming in,
  * a set of image tiles subsampled at higher resolution are loaded and displayed over the base layer. During pan and
  * zoom, tiles off screen or higher/lower resolution than required are discarded from memory.
@@ -299,6 +297,50 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(
     private var satTemp: ScaleAndTranslate? = null
     private val mtrx = Matrix()
     private val sRect = RectF()
+
+    init {
+        setMinimumDpi(160)
+        setDoubleTapZoomDpi(160)
+        setGestureDetector(context)
+
+        // Handle XML attributes
+        if (attr != null) {
+            val typedAttr = getContext().obtainStyledAttributes(attr, R.styleable.SubsamplingScaleImageView)
+            if (typedAttr.hasValue(R.styleable.SubsamplingScaleImageView_assetName)) {
+                val assetName = typedAttr.getString(R.styleable.SubsamplingScaleImageView_assetName)
+                if (assetName != null && assetName.isNotEmpty()) {
+                    setImage(asset(context, assetName))
+                }
+            }
+            if (typedAttr.hasValue(R.styleable.SubsamplingScaleImageView_src)) {
+                val resId = typedAttr.getResourceId(R.styleable.SubsamplingScaleImageView_src, 0)
+                if (resId > 0) {
+                    setImage(resource(context, resId))
+                }
+            }
+            if (typedAttr.hasValue(R.styleable.SubsamplingScaleImageView_panEnabled)) {
+                setPanEnabled(typedAttr.getBoolean(R.styleable.SubsamplingScaleImageView_panEnabled, true))
+            }
+            if (typedAttr.hasValue(R.styleable.SubsamplingScaleImageView_zoomEnabled)) {
+                isZoomEnabled = typedAttr.getBoolean(R.styleable.SubsamplingScaleImageView_zoomEnabled, true)
+            }
+            if (typedAttr.hasValue(R.styleable.SubsamplingScaleImageView_quickScaleEnabled)) {
+                isQuickScaleEnabled =
+                    typedAttr.getBoolean(R.styleable.SubsamplingScaleImageView_quickScaleEnabled, true)
+            }
+            if (typedAttr.hasValue(R.styleable.SubsamplingScaleImageView_tileBackgroundColor)) {
+                setTileBackgroundColor(
+                    typedAttr.getColor(
+                        R.styleable.SubsamplingScaleImageView_tileBackgroundColor,
+                        Color.argb(0, 0, 0, 0)
+                    )
+                )
+            }
+            typedAttr.recycle()
+        }
+        quickScaleThreshold =
+            TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 20F, context.resources.displayMetrics)
+    }
 
     /**
      * Set the image source from a bitmap, resource, asset, file or other URI.
@@ -2736,49 +2778,5 @@ open class SubsamplingScaleImageView @JvmOverloads constructor(
          * an instance-specific config) but custom decoder classes will not.
          */
         var preferredBitmapConfig: Bitmap.Config? = null
-    }
-
-    init {
-        setMinimumDpi(160)
-        setDoubleTapZoomDpi(160)
-        setGestureDetector(context)
-
-        // Handle XML attributes
-        if (attr != null) {
-            val typedAttr = getContext().obtainStyledAttributes(attr, R.styleable.SubsamplingScaleImageView)
-            if (typedAttr.hasValue(R.styleable.SubsamplingScaleImageView_assetName)) {
-                val assetName = typedAttr.getString(R.styleable.SubsamplingScaleImageView_assetName)
-                if (assetName != null && assetName.isNotEmpty()) {
-                    setImage(asset(context, assetName))
-                }
-            }
-            if (typedAttr.hasValue(R.styleable.SubsamplingScaleImageView_src)) {
-                val resId = typedAttr.getResourceId(R.styleable.SubsamplingScaleImageView_src, 0)
-                if (resId > 0) {
-                    setImage(resource(context, resId))
-                }
-            }
-            if (typedAttr.hasValue(R.styleable.SubsamplingScaleImageView_panEnabled)) {
-                setPanEnabled(typedAttr.getBoolean(R.styleable.SubsamplingScaleImageView_panEnabled, true))
-            }
-            if (typedAttr.hasValue(R.styleable.SubsamplingScaleImageView_zoomEnabled)) {
-                isZoomEnabled = typedAttr.getBoolean(R.styleable.SubsamplingScaleImageView_zoomEnabled, true)
-            }
-            if (typedAttr.hasValue(R.styleable.SubsamplingScaleImageView_quickScaleEnabled)) {
-                isQuickScaleEnabled =
-                    typedAttr.getBoolean(R.styleable.SubsamplingScaleImageView_quickScaleEnabled, true)
-            }
-            if (typedAttr.hasValue(R.styleable.SubsamplingScaleImageView_tileBackgroundColor)) {
-                setTileBackgroundColor(
-                    typedAttr.getColor(
-                        R.styleable.SubsamplingScaleImageView_tileBackgroundColor,
-                        Color.argb(0, 0, 0, 0)
-                    )
-                )
-            }
-            typedAttr.recycle()
-        }
-        quickScaleThreshold =
-            TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 20F, context.resources.displayMetrics)
     }
 }
