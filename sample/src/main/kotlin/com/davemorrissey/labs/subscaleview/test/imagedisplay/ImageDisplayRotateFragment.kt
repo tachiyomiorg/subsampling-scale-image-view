@@ -27,6 +27,10 @@ class ImageDisplayRotateFragment : Fragment() {
             ImageSource.asset(requireContext(), "swissroad.jpg")
         )
 
+        binding.rotate.setOnClickListener {
+            binding.imageView.imageRotation = binding.imageView.imageRotation.rotateBy90Degrees()
+        }
+
         return binding.root
     }
 }

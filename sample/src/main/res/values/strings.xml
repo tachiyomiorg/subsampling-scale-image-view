@@ -41,7 +41,7 @@
     </string>
     <string name="display.p2.subtitle">Rotation</string>
     <string name="display.p2.text">
-        This image has been rotated 90 degrees. Tap the button to rotate it. EXIF rotation is supported for external files.
+        This image can be rotated by 90 degree increments. Tap the button to do so. EXIF data is not parsed, do it yourself!
     </string>
     <string name="display.p3.subtitle">Display region</string>
     <string name="display.p3.text">Set the region to display instead of the whole image.</string>

@@ -206,6 +206,7 @@ public class SubsamplingScaleImageView extends View {
     // Source image dimensions and orientation - dimensions relate to the unrotated image
     private int sWidth;
     private int sHeight;
+    private ImageRotation imageRotation = ImageRotation.ROTATION_0;
     // Min scale allowed (prevent infinite zoom)
     private float minScale = minScale();
     private Rect sRegion;
@@ -536,12 +537,12 @@ public class SubsamplingScaleImageView extends View {
         int height = parentHeight;
         if (sWidth > 0 && sHeight > 0) {
             if (resizeWidth && resizeHeight) {
-                width = sWidth;
-                height = sHeight;
+                width = getEffectiveSWidth();
+                height = getEffectiveSHeight();
             } else if (resizeHeight) {
-                height = (int) ((((double) sHeight / (double) sWidth) * width));
+                height = (int) ((((double) getEffectiveSHeight() / (double) getEffectiveSWidth()) * width));
             } else if (resizeWidth) {
-                width = (int) ((((double) sWidth / (double) sHeight) * height));
+                width = (int) ((((double) getEffectiveSWidth() / (double) getEffectiveSHeight()) * height));
             }
         }
         width = Math.max(width, getSuggestedMinimumWidth());
@@ -606,6 +607,8 @@ public class SubsamplingScaleImageView extends View {
     @SuppressWarnings("deprecation")
     private boolean onTouchEventInternal(@NonNull MotionEvent event) {
         int touchCount = event.getPointerCount();
+        int sHeight = getEffectiveSHeight();
+        int sWidth = getEffectiveSWidth();
         switch (event.getAction()) {
             case MotionEvent.ACTION_DOWN:
             case MotionEvent.ACTION_POINTER_1_DOWN:
@@ -851,8 +854,8 @@ public class SubsamplingScaleImageView extends View {
                 sCenter.y = sRequestedCenter.y;
             } else {
                 // With no requested center, scale around the image center.
-                sCenter.x = sWidth / 2;
-                sCenter.y = sHeight / 2;
+                sCenter.x = getEffectiveSWidth() / 2;
+                sCenter.y = getEffectiveSHeight() / 2;
             }
         }
         float doubleTapZoomScale = Math.min(maxScale, SubsamplingScaleImageView.this.doubleTapZoomScale);
@@ -967,7 +970,17 @@ public class SubsamplingScaleImageView extends View {
                             }
                             matrix.reset();
                             setMatrixArray(srcArray, 0, 0, tile.bitmap.getWidth(), 0, tile.bitmap.getWidth(), tile.bitmap.getHeight(), 0, tile.bitmap.getHeight());
-                            setMatrixArray(dstArray, tile.vRect.left, tile.vRect.top, tile.vRect.right, tile.vRect.top, tile.vRect.right, tile.vRect.bottom, tile.vRect.left, tile.vRect.bottom);
+
+                            switch (getImageRotation()) {
+                                case ROTATION_0 ->
+                                        setMatrixArray(dstArray, tile.vRect.left, tile.vRect.top, tile.vRect.right, tile.vRect.top, tile.vRect.right, tile.vRect.bottom, tile.vRect.left, tile.vRect.bottom);
+                                case ROTATION_90 ->
+                                        setMatrixArray(dstArray, tile.vRect.right, tile.vRect.top, tile.vRect.right, tile.vRect.bottom, tile.vRect.left, tile.vRect.bottom, tile.vRect.left, tile.vRect.top);
+                                case ROTATION_180 ->
+                                        setMatrixArray(dstArray, tile.vRect.right, tile.vRect.bottom, tile.vRect.left, tile.vRect.bottom, tile.vRect.left, tile.vRect.top, tile.vRect.right, tile.vRect.top);
+                                case ROTATION_270 ->
+                                        setMatrixArray(dstArray, tile.vRect.left, tile.vRect.bottom, tile.vRect.left, tile.vRect.top, tile.vRect.right, tile.vRect.top, tile.vRect.right, tile.vRect.bottom);
+                            }
                             matrix.setPolyToPoly(srcArray, 0, dstArray, 0, 4);
                             canvas.drawBitmap(tile.bitmap, matrix, bitmapPaint);
                             if (debug) {
@@ -992,7 +1005,14 @@ public class SubsamplingScaleImageView extends View {
             }
             matrix.reset();
             matrix.postScale(xScale, yScale);
+            matrix.postRotate(getImageRotation().getRotation());
             matrix.postTranslate(vTranslate.x, vTranslate.y);
+
+            switch (getImageRotation()) {
+                case ROTATION_90 -> matrix.postTranslate(scale * sHeight, 0);
+                case ROTATION_180 -> matrix.postTranslate(scale * sWidth, scale * sHeight);
+                case ROTATION_270 -> matrix.postTranslate(0, scale * sWidth);
+            }
 
             if (tileBgPaint != null) {
                 if (sRect == null) {
@@ -1259,6 +1279,9 @@ public class SubsamplingScaleImageView extends View {
             scale = (minimumTileDpi / averageDpi) * scale;
         }
 
+        int sWidth = getEffectiveSWidth();
+        int sHeight = getEffectiveSHeight();
+
         int reqWidth = (int) (sWidth * scale);
         int reqHeight = (int) (sHeight * scale);
 
@@ -1304,8 +1327,8 @@ public class SubsamplingScaleImageView extends View {
 
         PointF vTranslate = sat.vTranslate;
         float scale = limitedScale(sat.scale);
-        float scaleWidth = scale * sWidth;
-        float scaleHeight = scale * sHeight;
+        float scaleWidth = scale * getEffectiveSWidth();
+        float scaleHeight = scale * getEffectiveSHeight();
 
         boolean extra = panLimit == PAN_LIMIT_INSIDE;
         float extraLeft = extra ? vExtraSpaceLeft : 0;
@@ -1368,7 +1391,7 @@ public class SubsamplingScaleImageView extends View {
         scale = satTemp.scale;
         vTranslate.set(satTemp.vTranslate);
         if (init) {
-            vTranslate.set(vTranslateForSCenter(sWidth / 2, sHeight / 2, scale));
+            vTranslate.set(vTranslateForSCenter((float) getEffectiveSWidth() / 2, (float) getEffectiveSHeight() / 2, scale));
         }
     }
 
@@ -1381,6 +1404,8 @@ public class SubsamplingScaleImageView extends View {
         int sampleSize = fullImageSampleSize;
         int xTiles = 1;
         int yTiles = 1;
+        int sWidth = getEffectiveSWidth();
+        int sHeight = getEffectiveSHeight();
         while (true) {
             int sTileWidth = sWidth / xTiles;
             int sTileHeight = sHeight / yTiles;
@@ -1546,12 +1571,62 @@ public class SubsamplingScaleImageView extends View {
     }
 
     /**
+     * Get source width taking rotation into account.
+     */
+    @SuppressWarnings("SuspiciousNameCombination")
+    private int getEffectiveSWidth() {
+        ImageRotation rotation = getImageRotation();
+        if (rotation == ImageRotation.ROTATION_90 || rotation == ImageRotation.ROTATION_270) {
+            return sHeight;
+        } else {
+            return sWidth;
+        }
+    }
+
+    /**
+     * Get source height taking rotation into account.
+     */
+    @SuppressWarnings("SuspiciousNameCombination")
+    private int getEffectiveSHeight() {
+        ImageRotation rotation = getImageRotation();
+        if (rotation == ImageRotation.ROTATION_90 || rotation == ImageRotation.ROTATION_270) {
+            return sWidth;
+        } else {
+            return sHeight;
+        }
+    }
+
+    /**
      * Converts source rectangle from tile, which treats the image file as if it were in the correct orientation already,
      * to the rectangle of the image that needs to be loaded.
      */
+    @SuppressWarnings("SuspiciousNameCombination")
     @AnyThread
     private void fileSRect(Rect sRect, Rect target) {
-        target.set(sRect);
+        ImageRotation rotation = getImageRotation();
+
+        switch (rotation) {
+            case ROTATION_0 ->
+                    target.set(sRect);
+            case ROTATION_90 ->
+                    target.set(sRect.top, sHeight - sRect.right, sRect.bottom, sHeight - sRect.left);
+            case ROTATION_180 ->
+                    target.set(sWidth - sRect.right, sHeight - sRect.bottom, sWidth - sRect.left, sHeight - sRect.top);
+            case ROTATION_270 ->
+                    target.set(sWidth - sRect.bottom, sRect.left, sWidth - sRect.top, sRect.right);
+        }
+    }
+
+    public ImageRotation getImageRotation() {
+        return imageRotation;
+    }
+
+    public void setImageRotation(ImageRotation rotation) {
+        this.imageRotation = rotation;
+
+        reset(false);
+        invalidate();
+        requestLayout();
     }
 
     /**
@@ -1825,6 +1900,8 @@ public class SubsamplingScaleImageView extends View {
 
         int vPadding = getPaddingBottom() + getPaddingTop() + vExtra;
         int hPadding = getPaddingLeft() + getPaddingRight() + hExtra;
+        int sWidth = getEffectiveSWidth();
+        int sHeight = getEffectiveSHeight();
         switch (minimumScaleType) {
             case SCALE_TYPE_CENTER_INSIDE:
             default:
@@ -1939,8 +2016,8 @@ public class SubsamplingScaleImageView extends View {
             return;
         }
 
-        float scaleWidth = scale * sWidth;
-        float scaleHeight = scale * sHeight;
+        float scaleWidth = scale * getEffectiveSWidth();
+        float scaleHeight = scale * getEffectiveSHeight();
 
         if (panLimit == PAN_LIMIT_CENTER) {
             vTarget.top = Math.max(0, -(vTranslate.y - (getHeight() / 2)));
@@ -2215,7 +2292,7 @@ public class SubsamplingScaleImageView extends View {
         this.anim = null;
         this.pendingScale = limitedScale(0);
         if (isReady()) {
-            this.sPendingCenter = new PointF(sWidth / 2, sHeight / 2);
+            this.sPendingCenter = new PointF(getEffectiveSWidth() / 2, getEffectiveSHeight() / 2);
         } else {
             this.sPendingCenter = new PointF(0, 0);
         }
@@ -2348,8 +2425,8 @@ public class SubsamplingScaleImageView extends View {
     public final void setPanEnabled(boolean panEnabled) {
         this.panEnabled = panEnabled;
         if (!panEnabled && vTranslate != null) {
-            vTranslate.x = (getWidth() / 2) - (scale * (sWidth / 2));
-            vTranslate.y = (getHeight() / 2) - (scale * (sHeight / 2));
+            vTranslate.x = (getWidth() / 2) - (scale * (getEffectiveSWidth() / 2));
+            vTranslate.y = (getHeight() / 2) - (scale * (getEffectiveSHeight() / 2));
             if (isReady()) {
                 refreshRequiredTiles(true);
                 invalidate();
@@ -2745,6 +2822,11 @@ public class SubsamplingScaleImageView extends View {
                     view.decoderLock.readLock().lock();
                     try {
                         if (decoder.isReady()) {
+                            // Update tile's file sRect according to rotation
+                            view.fileSRect(tile.sRect, tile.fileSRect);
+                            if (view.sRegion != null) {
+                                tile.fileSRect.offset(view.sRegion.left, view.sRegion.top);
+                            }
                             return decoder.decodeRegion(tile.fileSRect, tile.sampleSize);
                         } else {
                             tile.loading = false;
