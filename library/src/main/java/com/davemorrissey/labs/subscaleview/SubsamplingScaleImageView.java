@@ -171,6 +171,8 @@ public class SubsamplingScaleImageView extends View {
     private int minimumScaleType = SCALE_TYPE_CENTER_INSIDE;
     // Whether to crop borders.
     private boolean cropBorders = false;
+    // Whether to decode to hardware bitmap
+    private boolean hardwareConfig = true;
     private int maxTileWidth = TILE_SIZE_AUTO;
     private int maxTileHeight = TILE_SIZE_AUTO;
     // An executor service for loading of images
@@ -1542,6 +1544,15 @@ public class SubsamplingScaleImageView extends View {
     }
 
     /**
+     * Set if we want to use hardware bitmap config for decoded bitmap regions.
+     *
+     * @param hardwareConfig Whether to use hardware bitmap config.
+     */
+    public void setHardwareConfig(boolean hardwareConfig) {
+        this.hardwareConfig = hardwareConfig;
+    }
+
+    /**
      * By default the View automatically calculates the optimal tile size. Set this to override this, and force an upper limit to the dimensions of the generated tiles. Passing {@link #TILE_SIZE_AUTO} will re-enable the default behaviour.
      *
      * @param maxPixels Maximum tile size X and Y in pixels.
@@ -2760,7 +2771,7 @@ public class SubsamplingScaleImageView extends View {
                 InputProvider provider = providerRef.get();
                 if (context != null && view != null && provider == view.provider) {
                     view.debug("TilesInitTask.doInBackground");
-                    decoder = new Decoder(view.cropBorders, view.displayProfile.toByteArray());
+                    decoder = new Decoder(view.cropBorders, view.hardwareConfig, view.displayProfile.toByteArray());
                     Point dimensions = decoder.init(context, provider);
                     int sWidth = dimensions.x;
                     int sHeight = dimensions.y;

@@ -12,6 +12,7 @@ import tachiyomi.decoder.ImageDecoder.Companion.newInstance
 
 class Decoder(
     private val cropBorders: Boolean,
+    private val hardwareConfig: Boolean,
     private val displayProfile: ByteArray,
 ) : ImageRegionDecoder {
 
@@ -53,11 +54,16 @@ class Decoder(
      * @return The decoded region. It is safe to return null if decoding fails.
      */
     override fun decodeRegion(sRect: Rect, sampleSize: Int): Bitmap {
-        val bitmap = decoder?.decode(sRect, sampleSize)
-        if (Build.VERSION.SDK_INT >= 26) {
-            bitmap?.copy(Bitmap.Config.HARDWARE, false)?.let { return it; }
+        var bitmap = decoder?.decode(sRect, sampleSize)
+        check(bitmap != null) { "Failed to decode region" }
+        if (hardwareConfig && Build.VERSION.SDK_INT >= 26) {
+            val hwBitmap = bitmap.copy(Bitmap.Config.HARDWARE, false)
+            if (hwBitmap != null) {
+                bitmap.recycle()
+                bitmap = hwBitmap
+            }
         }
-        return bitmap ?: error("Null region bitmap")
+        return bitmap
     }
 
     /**
